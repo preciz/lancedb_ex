@@ -30,7 +30,7 @@ compile Rust.
 
 ## Installation
 
-After the first public release, add the package to `mix.exs`:
+Add the package to `mix.exs`:
 
 ```elixir
 defp deps do
@@ -74,8 +74,7 @@ also checked fresh consumers on both targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
 and completed a write and query without Rust or credentials.
 
-The first Hex release is not published yet. To use the current public
-checkout before that release, add this dependency:
+To install from the public repository, use this Git dependency:
 
 ```elixir
 {:lancedb_ex, github: "preciz/lancedb_ex", branch: "main"}
