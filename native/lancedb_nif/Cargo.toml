@@ -1,6 +1,7 @@
 [package]
 name = "lancedb_nif"
 version = "0.1.0"
+license = "MIT"
 authors = []
 edition = "2021"
 

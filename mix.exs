@@ -48,7 +48,7 @@ defmodule LanceDB.MixProject do
       ],
       package: [
         name: "lancedb_ex",
-        licenses: ["Apache-2.0"],
+        licenses: ["MIT"],
         links: %{"GitHub" => @source_url},
         files:
           ~w(lib docs native Cargo.toml Cargo.lock mix.exs README.md LICENSE .formatter.exs native-build.exs checksum-*.exs)

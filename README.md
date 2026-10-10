@@ -101,3 +101,4 @@ Incorrect API arguments raise `ArgumentError`.
 | [Migration guide](docs/migration.md) | API changes from earlier checkouts. |
 
 The source repository is [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex).
+This package uses the [MIT license](https://github.com/preciz/lancedb_ex/blob/main/LICENSE).
