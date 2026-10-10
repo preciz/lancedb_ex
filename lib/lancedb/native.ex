@@ -46,7 +46,7 @@ defmodule LanceDB.Native do
   end
 
   environment_url = System.get_env("LANCEDB_NIF_BASE_URL")
-  configured_url = Application.compile_env(:lancedb, :nif_base_url, :default)
+  configured_url = Application.compile_env(:lancedb_ex, :nif_base_url, :default)
 
   base_url =
     environment_url ||
@@ -66,7 +66,7 @@ defmodule LanceDB.Native do
   if not force_build and base_url in [nil, ""] do
     raise """
     LanceDB requires a precompiled NIF artifact URL. Set LANCEDB_NIF_BASE_URL or
-    configure :lancedb, :nif_base_url. Missing configuration does not trigger a
+    configure :lancedb_ex, :nif_base_url. Missing configuration does not trigger a
     source build. Maintainers can explicitly build with LANCEDB_BUILD=true.
     """
   end
@@ -79,7 +79,7 @@ defmodule LanceDB.Native do
   end
 
   use RustlerPrecompiled,
-    otp_app: :lancedb,
+    otp_app: :lancedb_ex,
     crate: "lancedb_nif",
     version: build.id,
     base_url: base_url,

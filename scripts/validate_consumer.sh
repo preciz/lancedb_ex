@@ -4,14 +4,14 @@ set -euo pipefail
 package_root=$(cd "$(dirname "$0")/.." && pwd)
 validation_root=$(mktemp -d)
 trap 'rm -rf "$validation_root"' EXIT
-mkdir -p "$validation_root/consumer/vendor/lancedb" "$validation_root/bin"
-git -C "$package_root" archive HEAD | tar -x -C "$validation_root/consumer/vendor/lancedb"
+mkdir -p "$validation_root/consumer/vendor/lancedb_ex" "$validation_root/bin"
+git -C "$package_root" archive HEAD | tar -x -C "$validation_root/consumer/vendor/lancedb_ex"
 # In publication CI these two files come directly from the trusted build jobs.
-cp "$package_root/native-build.exs" "$package_root/checksum-Elixir.LanceDB.Native.exs" "$validation_root/consumer/vendor/lancedb/"
+cp "$package_root/native-build.exs" "$package_root/checksum-Elixir.LanceDB.Native.exs" "$validation_root/consumer/vendor/lancedb_ex/"
 cat > "$validation_root/consumer/mix.exs" <<'MIX'
 defmodule NativeConsumer.MixProject do
   use Mix.Project
-  def project, do: [app: :native_consumer, version: "0.1.0", deps: [{:lancedb, path: "vendor/lancedb"}]]
+  def project, do: [app: :native_consumer, version: "0.1.0", deps: [{:lancedb_ex, path: "vendor/lancedb_ex"}]]
   def application, do: [extra_applications: [:logger]]
 end
 MIX
@@ -81,16 +81,16 @@ expect_failure() {
   fi
   echo "Verified failure without Rust: $expected"
 }
-expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH=riscv64gc mix deps.compile lancedb --force
+expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH=riscv64gc mix deps.compile lancedb_ex --force
 export RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$validation_root/unavailable-cache"
-expect_failure 'Error while downloading precompiled NIF' env LANCEDB_NIF_BASE_URL=http://127.0.0.1:1/ mix deps.compile lancedb --force
+expect_failure 'Error while downloading precompiled NIF' env LANCEDB_NIF_BASE_URL=http://127.0.0.1:1/ mix deps.compile lancedb_ex --force
 # Populate the cache with an invalid archive under the exact immutable filename.
 mkdir -p "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH"
 archive_name=$(find "$validation_root/empty-nif-cache" -name '*.so.tar.gz' -exec basename {} \;)
 printf 'invalid archive\n' > "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH/$archive_name"
-expect_failure 'checksum of files does not match' mix deps.compile lancedb --force
-rm vendor/lancedb/checksum-Elixir.LanceDB.Native.exs
-expect_failure 'trusted checksum manifest is missing' mix deps.compile lancedb --force
-rm vendor/lancedb/native-build.exs
-expect_failure 'native-build.exs is missing' mix deps.compile lancedb --force
+expect_failure 'checksum of files does not match' mix deps.compile lancedb_ex --force
+rm vendor/lancedb_ex/checksum-Elixir.LanceDB.Native.exs
+expect_failure 'trusted checksum manifest is missing' mix deps.compile lancedb_ex --force
+rm vendor/lancedb_ex/native-build.exs
+expect_failure 'native-build.exs is missing' mix deps.compile lancedb_ex --force
 echo 'Fresh consumer verification passed with an empty initial NIF cache, default URL, and no Rust or Cargo.'

@@ -9,7 +9,7 @@ defmodule LanceDB.NativeSourceBuildTest do
     File.write!(Path.join(root, "mix.exs"), """
     defmodule Fixture.MixProject do
       use Mix.Project
-      def project, do: [app: :lancedb, version: "0.0.0", elixir: "~> 1.20"]
+      def project, do: [app: :lancedb_ex, version: "0.0.0", elixir: "~> 1.20"]
       def application, do: [extra_applications: [:logger]]
     end
     """)

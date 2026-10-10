@@ -39,7 +39,7 @@ defmodule LanceDB.NativeBuildTest do
     config =
       RustlerPrecompiled.Config.new(
         module: LanceDB.Native,
-        otp_app: :lancedb,
+        otp_app: :lancedb_ex,
         crate: "lancedb_nif",
         base_url: build.default_url,
         version: build.id,
@@ -69,7 +69,7 @@ defmodule LanceDB.NativeBuildTest do
       for revision <- [String.duplicate("a", 40), String.duplicate("b", 40)] do
         RustlerPrecompiled.Config.new(
           module: LanceDB.Native,
-          otp_app: :lancedb,
+          otp_app: :lancedb_ex,
           crate: "lancedb_nif",
           base_url: "https://example.com/native-#{revision}",
           version: "0.0.0+#{revision}",
@@ -108,7 +108,7 @@ defmodule LanceDB.NativeBuildTest do
     code = """
     Mix.start()
     Code.require_file("mix.exs")
-    if System.get_env("LANCEDB_TEST_EMPTY_URL") == "true", do: Application.put_env(:lancedb, :nif_base_url, "")
+    if System.get_env("LANCEDB_TEST_EMPTY_URL") == "true", do: Application.put_env(:lancedb_ex, :nif_base_url, "")
     Mix.Project.build_structure()
     Code.compile_file(#{inspect(native)})
     """

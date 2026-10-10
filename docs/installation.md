@@ -37,7 +37,7 @@ After the first public release, add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb, "~> 0.1.0", hex: :lancedb_ex}
+    {:lancedb_ex, "~> 0.1.0"}
   ]
 end
 ```
@@ -50,7 +50,7 @@ mix compile
 ```
 
 A URL override and a supervision tree entry are not necessary.
-The Hex package name is `lancedb_ex`. The OTP application name is `lancedb`.
+The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
 default artifact URL. The Elixir package version is `0.1.0`. The package
 pins the SDK version to `=0.37.1`. These versions do not identify the
@@ -81,7 +81,7 @@ See [Building precompiled artifacts](native-builds.md#building-precompiled-artif
 To use an existing mirror, set its artifact URL in `config/config.exs`:
 
 ```elixir
-config :lancedb, :nif_base_url, "https://your-artifact-host/lancedb/native-<source-revision>/"
+config :lancedb_ex, :nif_base_url, "https://your-artifact-host/lancedb/native-<source-revision>/"
 ```
 
 At compile time, `LANCEDB_NIF_BASE_URL` overrides the application setting. A
@@ -89,7 +89,7 @@ URL override changes the download location. Use `{url, headers}` as
 `:nif_base_url` if your mirror uses authentication. The
 mirror must supply the committed archives with their exact filenames. The
 package still checks the committed checksums. After you change the build
-mode or URL, run `mix deps.compile lancedb --force`.
+mode or URL, run `mix deps.compile lancedb_ex --force`.
 
 Do not create checksums during installation.
 

@@ -7,7 +7,7 @@ defmodule LanceDB.MixProject do
 
   def project do
     [
-      app: :lancedb,
+      app: :lancedb_ex,
       version: @version,
       elixir: "~> 1.20",
       description: "Embedded LanceDB vector search for Elixir, powered by Rustler.",
@@ -47,7 +47,6 @@ defmodule LanceDB.MixProject do
         {:ex_doc, "~> 0.40.4", only: :dev, runtime: false}
       ],
       package: [
-        name: "lancedb_ex",
         licenses: ["MIT"],
         links: %{"GitHub" => @source_url},
         files:

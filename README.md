@@ -23,7 +23,7 @@ After the first public release, add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb, "~> 0.1.0", hex: :lancedb_ex}
+    {:lancedb_ex, "~> 0.1.0"}
   ]
 end
 ```
