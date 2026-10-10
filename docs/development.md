@@ -32,9 +32,8 @@ Each test directory has a specific purpose:
 
 Without `LANCEDB_BUILD=true`, tests use the published NIF. Set
 `LANCEDB_BUILD=true` before dependency resolution to check changes to Rust.
-Some safety and scheduler tests need the latest native source. See
-[Current native build](installation.md#current-native-build). The default suite does not need an S3 service or
-Phoenix application. CI runs the S3 suite separately.
+The default suite does not need an S3 service or Phoenix application.
+CI runs the S3 suite separately.
 
 Integration tests check persistence, scalar and recursive schemas, searches,
 indexes, writes, ingestion, and schema evolution. They also check history,
@@ -63,10 +62,10 @@ Native safety tests reject excessively nested malformed records, including a
 10,000-level input tested in a separate BEAM. Term decoding limits wire
 nesting to 64 levels, including the outer row list and row map. Scheduler
 tests run a separate BEAM with one dirty I/O scheduler and hold storage
-responses in a local read-only S3 fixture. Pending cursor reads and cleanup
-wait on Tokio and reply by message, keeping BEAM schedulers available for
-other work. Source-build regressions use tiny Cargo workspaces and run only
-with `LANCEDB_BUILD=true`. Properties that change data create a fresh
+responses in a local read-only S3 fixture. Pending cursor reads, cleanup,
+and native job waits use Tokio and reply by message. BEAM schedulers stay
+available for other work. Source-build regressions use tiny Cargo workspaces
+and run only with `LANCEDB_BUILD=true`. Properties that change data create a fresh
 database **inside** `check all` with `with_database/1`.
 
 This helper removes the database after each generation and shrink attempt.

@@ -44,9 +44,9 @@ Normal installation does not compile Rust or create checksums. Missing
 configuration, unsupported platforms, download failures, and incorrect
 checksums stop compilation.
 
-The first public release is not published yet. See
-[Current native build](docs/installation.md#current-native-build) for the
-artifact status and source installation steps.
+The first Hex release is not published yet. See
+[Current native build](docs/installation.md#current-native-build) to install
+from the public repository with precompiled binaries.
 
 See the [installation guide](docs/installation.md) for URL overrides,
 offline builds, application releases, and S3 storage options.

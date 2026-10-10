@@ -31,9 +31,7 @@ Keep public option checks in the builders.
 Row input uses direct BEAM terms. Native decoding creates owned values
 before background work starts. Small schema and query descriptions use JSON.
 `Batch.to_rows/1` converts Arrow output through JSON. Native codec tests
-check JSON round trips. The unused JSON input NIF has been removed from
-native source. Its Elixir loader stub remains until the default binary
-is replaced, because that binary still exports the old function.
+check JSON round trips.
 
 A batch slice can keep its parent buffers. The `batch_size` option limits
 returned rows. It does not limit memory use. Arrow IPC import and export

@@ -223,10 +223,6 @@ defmodule LanceDB.Native do
 
   def batch_schema(_batch), do: :erlang.nif_error(:nif_not_loaded)
 
-  # Loader compatibility: the committed precompiled build still exports this NIF.
-  # Remove this stub after a replacement native build becomes the default.
-  def batch_from_json(_rows_json, _schema_json, _metadata), do: :erlang.nif_error(:nif_not_loaded)
-
   def ingest_push_batch(_writer, _batch), do: :erlang.nif_error(:nif_not_loaded)
 
   def batch_to_ipc(_batch), do: :erlang.nif_error(:nif_not_loaded)

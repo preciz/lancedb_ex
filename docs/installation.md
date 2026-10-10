@@ -62,14 +62,27 @@ release.
 
 ### Current native build
 
-Version `0.1.0` is being prepared for its first public release. Both Linux
-native archives must be published before a normal installation can work.
-The committed manifests still identify a legacy private build. They must
-be replaced together with the trusted manifests from the first verified
-public build. Do not publish the Hex package with the legacy manifests.
+The selected native build is
+[`0.0.0+6838bd9fe03112762c0df639bcdec52e776ca797`](https://github.com/preciz/lancedb_ex/releases/tag/native-6838bd9fe03112762c0df639bcdec52e776ca797).
+Its exact source revision is
+[`6838bd9fe03112762c0df639bcdec52e776ca797`](https://github.com/preciz/lancedb_ex/commit/6838bd9fe03112762c0df639bcdec52e776ca797).
+It uses SDK `0.37.1` and NIF ABI `2.15`.
 
-Until public artifacts are available, maintainers can use a local checkout
-and an [explicit source build](native-builds.md#explicit-maintainer-source-builds).
+Both Linux targets passed their Rust and Elixir tests. The
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38081191762)
+also checked fresh consumers on both targets. Each consumer downloaded the
+archive from the public default URL, checked its checksum, loaded the NIF,
+and completed a write and query without Rust or credentials.
+
+The first Hex release is not published yet. To use the current public
+checkout before that release, add this dependency:
+
+```elixir
+{:lancedb_ex, github: "preciz/lancedb_ex", branch: "main"}
+```
+
+Then run `mix deps.get` and `mix compile`. This installation uses the
+published native archives. It does not compile Rust.
 
 See [Building precompiled artifacts](native-builds.md#building-precompiled-artifacts) for the publication procedure.
 
