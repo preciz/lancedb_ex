@@ -99,7 +99,6 @@ Incorrect API arguments raise `ArgumentError`.
 | [Development and tests](docs/development.md) | Local checks, StreamData properties, coverage, and MinIO tests. |
 | [Native builds](docs/native-builds.md) | Explicit source builds, immutable artifacts, publication, and consumer checks. |
 | [Implementation notes](docs/internals.md) | Module responsibilities and SDK compatibility adapters. |
-| [Benchmarks](docs/benchmarks.md) | Historical measurements and their limits. |
 | [Migration guide](docs/migration.md) | API changes from earlier checkouts. |
 
 The source repository is [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex).
