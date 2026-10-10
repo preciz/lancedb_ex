@@ -1,6 +1,7 @@
 //! Ordering shared by SDK queries and post-fusion results.
 use crate::error::Failure;
-use arrow_array::{Array, Float32Array, RecordBatch};
+use arrow::buffer::NullBuffer;
+use arrow_array::{make_array, Array, ArrayRef, Float32Array, RecordBatch, StructArray};
 use arrow_schema::SortOptions;
 use lancedb::query::{ColumnOrdering, QueryBase};
 use std::sync::Arc;
@@ -30,11 +31,8 @@ pub(crate) fn sort(batch: RecordBatch, ordering: &Ordering) -> Result<RecordBatc
     let columns = ordering
         .iter()
         .map(|(name, ascending, nulls_first)| {
-            let column = batch
-                .column_by_name(name)
-                .ok_or_else(|| format!("Unknown ordering column '{name}'"))?;
             Ok(arrow::compute::SortColumn {
-                values: column.clone(),
+                values: ordering_column(&batch, name)?,
                 options: Some(SortOptions {
                     descending: !ascending,
                     nulls_first: *nulls_first,
@@ -45,6 +43,37 @@ pub(crate) fn sort(batch: RecordBatch, ordering: &Ordering) -> Result<RecordBatc
     let indices =
         arrow::compute::lexsort_to_indices(&columns, None).map_err(Failure::from_error)?;
     take(&batch, &indices)
+}
+
+fn ordering_column(batch: &RecordBatch, name: &str) -> Result<ArrayRef, Failure> {
+    // Computed projections expose retained sort keys under their full path.
+    if let Some(column) = batch.column_by_name(name) {
+        return Ok(column.clone());
+    }
+    let path = lance::datatypes::parse_field_path(name).map_err(Failure::from_error)?;
+    let missing = || format!("Unknown ordering column '{name}'");
+    let mut column = batch.column_by_name(&path[0]).ok_or_else(missing)?.clone();
+    for component in &path[1..] {
+        let parent = column
+            .as_any()
+            .downcast_ref::<StructArray>()
+            .ok_or_else(missing)?;
+        let child = parent.column_by_name(component).ok_or_else(missing)?;
+        column = if parent.nulls().is_some() {
+            // A child value below any null parent must also sort as null.
+            let nulls = NullBuffer::union(parent.nulls(), child.nulls());
+            let data = child
+                .to_data()
+                .into_builder()
+                .nulls(nulls)
+                .build()
+                .map_err(Failure::from_error)?;
+            make_array(data)
+        } else {
+            child.clone()
+        };
+    }
+    Ok(column)
 }
 
 pub(crate) fn take(batch: &RecordBatch, indices: &dyn Array) -> Result<RecordBatch, Failure> {
@@ -116,6 +145,61 @@ pub(crate) fn normalize(
 mod tests {
     use super::*;
     use arrow_schema::{DataType, Field, Schema};
+
+    #[test]
+    fn nested_sort_preserves_null_parents_and_quoted_path_segments() {
+        use arrow_array::Int32Array;
+
+        let leaf = Arc::new(Field::new("score.with.dot", DataType::Int32, true));
+        let child = StructArray::new(
+            vec![leaf].into(),
+            vec![Arc::new(Int32Array::from(vec![100, -100, 2, 1]))],
+            Some(NullBuffer::from(vec![true, false, true, true])),
+        );
+        let parent = StructArray::new(
+            vec![Arc::new(Field::new(
+                "rank` score",
+                child.data_type().clone(),
+                true,
+            ))]
+            .into(),
+            vec![Arc::new(child)],
+            Some(NullBuffer::from(vec![false, true, true, true])),
+        );
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                Field::new("id", DataType::Int32, false),
+                Field::new("data root", parent.data_type().clone(), true),
+            ])),
+            vec![
+                Arc::new(Int32Array::from(vec![1, 2, 3, 4])),
+                Arc::new(parent),
+            ],
+        )
+        .unwrap();
+        let ordering = vec![
+            (
+                "`data root`.`rank`` score`.`score.with.dot`".into(),
+                true,
+                false,
+            ),
+            ("id".into(), true, false),
+        ];
+        for (input, expected) in [
+            (batch.clone(), vec![4, 3, 1, 2]),
+            (batch.slice(1, 3), vec![4, 3, 2]),
+        ] {
+            let result = sort(input, &ordering).unwrap();
+            let ids = result
+                .column(0)
+                .as_any()
+                .downcast_ref::<Int32Array>()
+                .unwrap();
+            assert_eq!(ids.values().as_ref(), expected);
+        }
+        assert!(ordering_column(&batch, "data root.missing").is_err());
+        assert!(ordering_column(&batch, "id.missing").is_err());
+    }
 
     fn batch(scores: Vec<f32>) -> RecordBatch {
         RecordBatch::try_new(

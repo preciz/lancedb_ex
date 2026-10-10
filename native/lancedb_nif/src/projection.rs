@@ -115,7 +115,10 @@ impl ProjectionRequest {
             selected.push((anchor.name().clone(), quote(anchor.name())));
             for (name, _, _) in order_by {
                 if !selected.iter().any(|(alias, _)| alias == name) {
-                    selected.push((name.clone(), quote(name)));
+                    selected.push((
+                        name.clone(),
+                        lance::datatypes::escape_field_path_for_project(name),
+                    ));
                 }
             }
             for name in metadata {

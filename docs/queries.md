@@ -56,6 +56,10 @@ The default limit is 100 rows. The default offset is 0. To return all
 columns, do not set `:columns`. Column names accept strings or atoms.
 `:order_by` accepts an ordered keyword list, such as
 `[asc: :category, desc: :id]`. Nulls sort last by default.
+Use a field path for nested values, such as `[asc: "data.rank.score"]`.
+Put a path segment in backticks if its name contains a dot. Escape a
+backtick in a name with two backticks. Nested ordering also works with
+computed projections and hybrid search.
 
 Use the `_nulls_first` or `_nulls_last` directions to set null placement.
 You can sort by columns that the query does not return. Results use string

@@ -46,7 +46,7 @@ telemetry recorder state or environment variables run synchronously.
 StreamData is a test-only dependency. Properties check recursive JSON and
 typed values, exact integers and decimals, float32 rounding, schema
 metadata, expression quoting, query composition and overflow limits.
-Independent models check ordered pagination (including null ordering),
+Independent models check ordered pagination and nested sorting (including null ordering),
 upsert and conditional merge sequences, metadata updates and branch
 isolation. Vector properties verify both candidate completeness and
 distances against arithmetic oracles.
