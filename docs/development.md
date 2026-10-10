@@ -109,7 +109,7 @@ scripts/test_s3.sh
 
 The script downloads the pinned MinIO release from its official GitHub
 assets and verifies it against a committed SHA256 digest. It supports the
-same four platforms as the NIF and caches the verified binary under
+same two Linux platforms as the NIF and caches the verified binary under
 `_build/minio`. The server binds to localhost on an ephemeral port, uses
 temporary data and test credentials, and is stopped on exit. Failed runs
 print its logs before cleanup. Docker, an AWS account, and GitHub secrets

@@ -23,8 +23,7 @@ for tool in bash sh rebar3 uname dirname basename readlink getconf sed awk cut t
     ln -s "$tool_path" "$validation_root/bin/$tool"
   fi
 done
-# Erlang's macOS launcher locates its installation relative to its own path.
-# Keep the original BEAM directories rather than relocating their launchers.
+# Keep the original BEAM directories so launchers can locate their installation.
 export PATH="$beam_bin:$elixir_bin:$validation_root/bin"
 if command -v gh || command -v rustc || command -v cargo || command -v rustup; then
   echo 'GitHub CLI or Rust toolchain unexpectedly available in consumer PATH' >&2
@@ -82,6 +81,9 @@ expect_failure() {
   echo "Verified failure without Rust: $expected"
 }
 expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH=riscv64gc mix deps.compile lancedb_ex --force
+for apple_arch in x86_64 aarch64; do
+  expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH="$apple_arch" TARGET_VENDOR=apple TARGET_OS=darwin TARGET_ABI= mix deps.compile lancedb_ex --force
+done
 export RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$validation_root/unavailable-cache"
 expect_failure 'Error while downloading precompiled NIF' env LANCEDB_NIF_BASE_URL=http://127.0.0.1:1/ mix deps.compile lancedb_ex --force
 # Populate the cache with an invalid archive under the exact immutable filename.

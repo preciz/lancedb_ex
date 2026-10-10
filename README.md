@@ -13,7 +13,6 @@ The Elixir package version is `0.1.0`. The Rust software development kit
 
 - Elixir 1.20 or a later 1.x version. CI uses OTP 29.
 - Linux x86_64 with glibc 2.35 or later, or Linux ARM64 with glibc 2.39 or later.
-- macOS x86_64 or ARM64. CI builds and tests the macOS binaries on macOS 15.
 
 Native archives use public GitHub releases. GitHub CLI, credentials, Rust,
 and Cargo are not necessary for normal installation.

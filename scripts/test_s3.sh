@@ -9,8 +9,6 @@ minio_release="RELEASE.2025-09-07T16-13-09Z"
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) minio_platform=linux-amd64; minio_digest=7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f ;;
   Linux-aarch64|Linux-arm64) minio_platform=linux-arm64; minio_digest=5c83cd2cf151717ba0243f73e1c7802ff36e272b67144bdd7f1f7d684fd6f03d ;;
-  Darwin-x86_64) minio_platform=darwin-amd64; minio_digest=4759080aeef7385aaceaac1131c30aaeb99605921553967dc6d3ef4e16ac64f9 ;;
-  Darwin-arm64) minio_platform=darwin-arm64; minio_digest=7c3b3039b76e55a1b80935848ed83998d5e8d317374f87851f46a019ff5c0aa4 ;;
   *) echo "Unsupported MinIO test platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 

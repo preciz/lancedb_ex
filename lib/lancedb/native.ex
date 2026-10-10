@@ -88,8 +88,6 @@ defmodule LanceDB.Native do
     targets: ~w(
       x86_64-unknown-linux-gnu
       aarch64-unknown-linux-gnu
-      aarch64-apple-darwin
-      x86_64-apple-darwin
     )
 
   def blob_columns(_table), do: :erlang.nif_error(:nif_not_loaded)

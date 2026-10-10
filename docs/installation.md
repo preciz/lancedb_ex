@@ -8,17 +8,15 @@
 
 The package downloads native binaries with `rustler_precompiled` 0.10. It
 checks each archive against the committed checksum manifest. The binaries
-use NIF ABI 2.15. The package supplies binaries for these four targets:
+use NIF ABI 2.15. The package supplies binaries for these two Linux targets:
 
 | Target | Build platform |
 | --- | --- |
 | `x86_64-unknown-linux-gnu` | Ubuntu 22.04; glibc 2.35 or later |
 | `aarch64-unknown-linux-gnu` | Ubuntu 24.04; glibc 2.39 or later |
-| `x86_64-apple-darwin` | macOS 15 |
-| `aarch64-apple-darwin` | macOS 15 |
 
-Use the listed Linux glibc version or a later version. The macOS builds run
-on macOS 15 runners. The workflow does not check earlier macOS versions.
+Use the listed Linux glibc version or a later version. Normal installation
+rejects other targets, including macOS, without compiling Rust.
 
 Native archives use public releases in
 [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex). Downloads use the
@@ -64,12 +62,11 @@ release.
 
 ### Current native build
 
-Version `0.1.0` is being prepared for its first public release. The public
-repository and its four native archives must be published before a normal
-installation can work. The committed manifests still identify a legacy
-private build. They must be replaced together with the trusted manifests
-from the first verified public build. Do not publish the Hex package with
-the legacy manifests.
+Version `0.1.0` is being prepared for its first public release. Both Linux
+native archives must be published before a normal installation can work.
+The committed manifests still identify a legacy private build. They must
+be replaced together with the trusted manifests from the first verified
+public build. Do not publish the Hex package with the legacy manifests.
 
 Until public artifacts are available, maintainers can use a local checkout
 and an [explicit source build](native-builds.md#explicit-maintainer-source-builds).

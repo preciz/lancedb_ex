@@ -26,6 +26,22 @@ defmodule LanceDB.NativeBuildTest do
     refute output =~ "Compiling crate"
   end
 
+  test "macOS targets fail without building Rust", %{cache: cache} do
+    for arch <- ["x86_64", "aarch64"] do
+      {output, status} =
+        compile_native(cache, [
+          {"TARGET_ARCH", arch},
+          {"TARGET_VENDOR", "apple"},
+          {"TARGET_OS", "darwin"},
+          {"TARGET_ABI", ""}
+        ])
+
+      assert status != 0
+      assert output =~ "precompiled NIF is not available for this target"
+      refute output =~ "Compiling crate"
+    end
+  end
+
   test "unavailable download fails without building Rust", %{cache: cache} do
     {output, status} = compile_native(cache, [{"LANCEDB_NIF_BASE_URL", "http://127.0.0.1:1/"}])
     assert status != 0
@@ -44,8 +60,7 @@ defmodule LanceDB.NativeBuildTest do
         base_url: build.default_url,
         version: build.id,
         force_build: false,
-        targets:
-          ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin),
+        targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu),
         nif_versions: ["2.15"]
       )
 
@@ -74,8 +89,7 @@ defmodule LanceDB.NativeBuildTest do
           base_url: "https://example.com/native-#{revision}",
           version: "0.0.0+#{revision}",
           force_build: false,
-          targets:
-            ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin),
+          targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu),
           nif_versions: ["2.15"]
         )
       end

@@ -4,7 +4,7 @@ case System.argv() do
   [library, target, version, output] ->
     Version.parse!(version)
 
-    if target not in ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin) do
+    if target not in ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) do
       raise ArgumentError, "unsupported precompiled target: #{target}"
     end
 

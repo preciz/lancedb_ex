@@ -66,10 +66,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-          - os: macos-15
-            target: aarch64-apple-darwin
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
     env:
       CARGO_BUILD_JOBS: '2'
     steps:
@@ -90,13 +86,9 @@ jobs:
       - name: Install protoc and free build disk
         shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-            sudo apt-get update
-            sudo apt-get install -y protobuf-compiler
-          else
-            brew install protobuf
-          fi
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
       - name: Build and test exact native source with NIF ABI 2.15
         working-directory: binary-source
         shell: bash
@@ -124,9 +116,6 @@ jobs:
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
         run: |
           library=binary-source/target/release/liblancedb_nif.so
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            library=binary-source/target/release/liblancedb_nif.dylib
-          fi
           elixir scripts/package_nif.exs "$library" "$NIF_TARGET" "$NATIVE_VERSION" artifacts
           elixir scripts/checksums.exs artifacts checksum-Elixir.LanceDB.Native.exs
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" native-build.exs
@@ -168,7 +157,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
         run: |
-          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 4
+          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 2
           (cd artifacts && sha256sum --check *.sha256)
           elixir scripts/checksums.exs artifacts artifacts/checksum-Elixir.LanceDB.Native.exs
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" artifacts/native-build.exs
@@ -198,7 +187,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

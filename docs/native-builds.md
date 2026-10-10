@@ -52,11 +52,11 @@ gh run list --workflow precompile.yml
 The workflow checks out that source revision separately from the workflow
 code. It builds with `cargo build --locked` and runs tests with
 `cargo test --locked`. It checks Rustler Cargo features for NIF ABI 2.15.
-It also checks that the build did not change `Cargo.lock`. All four targets
+It also checks that the build did not change `Cargo.lock`. Both Linux targets
 must pass the package tests with their packaged NIF before publication.
 Linux x86_64 uses Ubuntu 22.04.
 
-Linux ARM64 uses Ubuntu 24.04. Both macOS targets use macOS 15 runners.
+Linux ARM64 uses Ubuntu 24.04.
 
 The publication job checks all archives and combines their trusted
 checksums. It publishes the archives to the public GitHub release
@@ -127,15 +127,15 @@ elixir scripts/package_nif.exs target/release/liblancedb_nif.so x86_64-unknown-l
 elixir scripts/checksums.exs /tmp/lancedb-local-artifacts /tmp/lancedb-local-checksums.exs
 ```
 
-Use the matching target and `.dylib` input on macOS. A local archive does
-not substitute for the four-target workflow or its trusted combined
+Use the matching Linux target. A local archive does
+not substitute for the two-target workflow or its trusted combined
 manifest. The local packager refuses to replace an existing archive or
 checksum file. Build distributed binaries on their intended minimum OS version.
 
 ## First public package release
 
 Use the public repository `preciz/lancedb_ex`. First publish and verify the
-four native archives. Commit their matching build and checksum manifests.
+two Linux native archives. Commit their matching build and checksum manifests.
 Then update the release status in the README and installation guide.
 
 Check the package and its documentation before publication:
