@@ -1,5 +1,7 @@
 # LanceDB for Elixir
 
+[![Tests](https://github.com/preciz/lancedb_ex/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/preciz/lancedb_ex/actions/workflows/ci.yml)
+
 This package embeds [LanceDB](https://lancedb.com/) in Elixir through Rustler.
 Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
