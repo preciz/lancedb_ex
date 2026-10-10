@@ -107,7 +107,8 @@ defmodule LanceDB.Native do
 
   def create_index_async(_table, _column, _options), do: :erlang.nif_error(:nif_not_loaded)
   def job_status(_job), do: :erlang.nif_error(:nif_not_loaded)
-  def job_wait(_job, _timeout), do: :erlang.nif_error(:nif_not_loaded)
+  def job_wait(job, timeout), do: async_call(:job_wait, [job, timeout])
+  def job_wait(_job, _timeout, _reference), do: :erlang.nif_error(:nif_not_loaded)
   def job_cancel(_job), do: :erlang.nif_error(:nif_not_loaded)
 
   def create_stream_open(_conn, _name, _schema, _metadata, _options),
@@ -161,7 +162,7 @@ defmodule LanceDB.Native do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def stream_open(_table, _request, _batch_size), do: :erlang.nif_error(:nif_not_loaded)
-  def stream_close(cursor), do: cursor_call(:stream_close, cursor)
+  def stream_close(cursor), do: async_call(:stream_close, [cursor])
   def stream_close(_cursor, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
   def add_columns(_table, _expressions), do: :erlang.nif_error(:nif_not_loaded)
@@ -201,13 +202,13 @@ defmodule LanceDB.Native do
   def update_field_metadata(_table, _path, _changes, _replace),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def stream_next_batch(cursor), do: cursor_call(:stream_next_batch, cursor)
+  def stream_next_batch(cursor), do: async_call(:stream_next_batch, [cursor])
   def stream_next_batch(_cursor, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
-  defp cursor_call(operation, cursor) do
+  defp async_call(operation, args) do
     reference = make_ref()
 
-    case apply(__MODULE__, operation, [cursor, reference]) do
+    case apply(__MODULE__, operation, args ++ [reference]) do
       {:ok, :ok} ->
         receive do
           {^reference, result} -> result

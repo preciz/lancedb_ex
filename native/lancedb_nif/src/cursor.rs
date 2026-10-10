@@ -2,10 +2,11 @@
 use crate::error::Failure;
 use crate::execution::Deadline;
 use crate::query::{BatchStream, QueryRequest};
+use crate::reply::Reply;
 use crate::resources::{atoms, TableResource, RUNTIME};
 use arrow_array::RecordBatch;
 use futures::{FutureExt, TryStreamExt};
-use rustler::{Encoder, Env, LocalPid, Monitor, OwnedEnv, ResourceArc, Term};
+use rustler::{Encoder, Env, LocalPid, Monitor, ResourceArc, Term};
 use std::future::Future;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 #[cfg(test)]
@@ -33,30 +34,6 @@ impl Demand {
             #[cfg(test)]
             Self::Channel(reply) => reply.send(result).map_err(|_| ()),
         }
-    }
-}
-
-struct Reply {
-    pid: LocalPid,
-    env: OwnedEnv,
-    reference: rustler::env::SavedTerm,
-}
-
-impl Reply {
-    fn new(env: Env<'_>, reference: Term<'_>) -> Self {
-        let message_env = OwnedEnv::new();
-        let reference = message_env.save(reference);
-        Self {
-            pid: env.pid(),
-            env: message_env,
-            reference,
-        }
-    }
-
-    fn send(&mut self, result: impl Encoder) -> Result<(), rustler::env::SendError> {
-        self.env.send_and_clear(&self.pid, |env| {
-            (self.reference.load(env), result).encode(env)
-        })
     }
 }
 
@@ -316,23 +293,11 @@ fn stream_close<'a>(
     if cursor.channels.terminal.borrow().is_some() {
         return atoms::ok().encode(env);
     }
-    reply(env, reference, async move {
+    crate::reply::spawn(env, reference, async move {
         cursor.channels.close().await;
         atoms::ok()
     });
     (atoms::ok(), atoms::ok()).encode(env)
-}
-
-fn reply<T: Encoder + Send + 'static>(
-    env: Env<'_>,
-    reference: Term<'_>,
-    operation: impl Future<Output = T> + Send + 'static,
-) {
-    let mut reply = Reply::new(env, reference);
-    RUNTIME.spawn(async move {
-        let result = operation.await;
-        let _ = reply.send(result);
-    });
 }
 
 #[cfg(test)]

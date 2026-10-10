@@ -36,6 +36,7 @@ mod metrics;
 mod projection;
 mod query;
 mod ranking;
+mod reply;
 mod rerank;
 mod resources;
 mod schema;

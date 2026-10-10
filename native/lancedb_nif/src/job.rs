@@ -4,7 +4,7 @@ use crate::{
     execution::Permit,
     resources::{atoms, RUNTIME},
 };
-use rustler::{Atom, ResourceArc};
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::{
     panic::{RefUnwindSafe, UnwindSafe},
     sync::Arc,
@@ -46,9 +46,14 @@ fn job_status(job: ResourceArc<JobResource>) -> Result<String, Failure> {
         .block_on(job.job.status())
         .map_err(Failure::from_error)
 }
-#[rustler::nif(schedule = "DirtyIo")]
-fn job_wait(job: ResourceArc<JobResource>, timeout: Option<u64>) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
+#[rustler::nif]
+fn job_wait(
+    env: Env<'_>,
+    job: ResourceArc<JobResource>,
+    timeout: Option<u64>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::reply::spawn(env, reference, async move {
         match timeout {
             None => job.wait().await,
             Some(ms) => tokio::time::timeout(Duration::from_millis(ms), job.wait())
@@ -59,8 +64,9 @@ fn job_wait(job: ResourceArc<JobResource>, timeout: Option<u64>) -> Result<Atom,
                 })?,
         }
         .map_err(Failure::from_error)?;
-        Ok(atoms::created())
-    })
+        Ok::<_, Failure>(atoms::created())
+    });
+    Ok(atoms::ok())
 }
 #[rustler::nif(schedule = "DirtyIo")]
 fn job_cancel(job: ResourceArc<JobResource>) -> Result<Atom, Failure> {
