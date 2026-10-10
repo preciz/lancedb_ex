@@ -1,0 +1,48 @@
+//! Embedded LanceDB NIF entry point. Domain modules own their registered NIFs.
+mod extended_value;
+mod json_value;
+mod outcome;
+mod row_adapter;
+mod wire;
+
+mod analyzer;
+mod batch;
+mod binary;
+mod blob;
+mod branch;
+mod bulk;
+mod cloning;
+mod codec;
+mod compat;
+mod connection;
+mod creation;
+mod cursor;
+mod date;
+mod diagnostics;
+mod error;
+mod execution;
+mod fts;
+mod history;
+mod hybrid;
+mod index;
+mod index_fts;
+mod ingest_cursor;
+mod ingestion;
+mod job;
+mod maintenance;
+mod maintenance_options;
+mod metadata;
+mod metrics;
+mod projection;
+mod query;
+mod ranking;
+mod rerank;
+mod resources;
+mod schema;
+mod search_controls;
+mod table_open;
+mod timestamp;
+mod value;
+mod write;
+
+rustler::init!("Elixir.LanceDB.Native");

@@ -1,0 +1,219 @@
+name: Build precompiled NIFs
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Full immutable source commit to build (not a branch or package version)
+        required: true
+        type: string
+      verify_only:
+        description: Verify an existing published build without rebuilding or replacing archives
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ inputs.source_revision }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      revision: ${{ steps.identity.outputs.revision }}
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_revision }}
+      - name: Validate immutable identity and refuse replacement
+        id: identity
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_ONLY: ${{ inputs.verify_only }}
+        shell: bash
+        run: |
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          tag="native-$SOURCE_REVISION"
+          if [[ "$VERIFY_ONLY" == "true" ]]; then
+            gh release view "$tag" --json tagName >/dev/null
+          elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Build tag $tag already exists; artifacts must never be replaced." >&2
+            exit 1
+          fi
+          echo "revision=$SOURCE_REVISION" >> "$GITHUB_OUTPUT"
+          echo "version=0.0.0+$SOURCE_REVISION" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: ${{ !inputs.verify_only }}
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.revision }}
+          path: binary-source
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: binary-source -> target
+          key: precompile-${{ matrix.target }}
+      - name: Install protoc and free build disk
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          else
+            brew install protobuf
+          fi
+      - name: Build and test exact native source with NIF ABI 2.15
+        working-directory: binary-source
+        shell: bash
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+          SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
+          # Rustler 0.38 selects the ABI through Cargo features, not RUSTLER_NIF_VERSION.
+          cargo tree --locked -p lancedb_nif -e features > cargo-features.txt
+          grep -q 'rustler feature "nif_version_2_15"' cargo-features.txt
+          if grep -Eq 'rustler feature "nif_version_2_(16|17|18)"' cargo-features.txt; then
+            echo 'Unexpected newer NIF ABI enabled' >&2
+            exit 1
+          fi
+          cargo build --locked --release -p lancedb_nif
+          cargo test --locked --release -p lancedb_nif
+          git diff --exit-code Cargo.lock
+      - name: Package native library and record source
+        shell: bash
+        env:
+          NIF_TARGET: ${{ matrix.target }}
+          NATIVE_VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
+        run: |
+          library=binary-source/target/release/liblancedb_nif.so
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            library=binary-source/target/release/liblancedb_nif.dylib
+          fi
+          elixir scripts/package_nif.exs "$library" "$NIF_TARGET" "$NATIVE_VERSION" artifacts
+          elixir scripts/checksums.exs artifacts checksum-Elixir.LanceDB.Native.exs
+          elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" native-build.exs
+          cp binary-source/cargo-features.txt "artifacts/cargo-features-$NIF_TARGET.txt"
+      - name: Test packaged NIF without Rust compilation
+        shell: bash
+        run: |
+          mix deps.get
+          export RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$RUNNER_TEMP/nif-cache"
+          mkdir -p "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH"
+          cp artifacts/*.tar.gz "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH/"
+          mv native "$RUNNER_TEMP/lancedb-native"
+          mix test --cover --warnings-as-errors
+          mix run scripts/consumer_smoke.exs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nif-${{ matrix.target }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, build]
+    if: ${{ !inputs.verify_only }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nif-*
+          merge-multiple: true
+          path: artifacts
+      - name: Verify all archives and generate trusted manifests
+        env:
+          SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
+        run: |
+          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 4
+          (cd artifacts && sha256sum --check *.sha256)
+          elixir scripts/checksums.exs artifacts artifacts/checksum-Elixir.LanceDB.Native.exs
+          elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" artifacts/native-build.exs
+          cp artifacts/native-build.exs native-build.exs
+          cp artifacts/checksum-Elixir.LanceDB.Native.exs checksum-Elixir.LanceDB.Native.exs
+          printf 'Native source: %s\nWorkflow source: %s\nSDK: 0.37.1\nNIF ABI: 2.15\nWorkflow run: %s/%s/actions/runs/%s\n' "$SOURCE_REVISION" "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > artifacts/provenance.txt
+      - name: Publish once under immutable source tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_TAG: ${{ needs.prepare.outputs.tag }}
+          SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$NATIVE_TAG" >/dev/null 2>&1; then
+            echo "Refusing to replace existing $NATIVE_TAG" >&2
+            exit 1
+          fi
+          gh release create "$NATIVE_TAG" artifacts/* --target "$SOURCE_REVISION" --title "Native build $SOURCE_REVISION" --notes-file artifacts/provenance.txt --prerelease --latest=false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lancedb-precompiled
+          path: artifacts/*
+          if-no-files-found: error
+
+  consumer:
+    needs: [prepare, publish]
+    if: ${{ always() && needs.prepare.result == 'success' && (inputs.verify_only || needs.publish.result == 'success') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - name: Fetch trusted manifests from the immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release download "$NATIVE_TAG" --pattern native-build.exs --pattern checksum-Elixir.LanceDB.Native.exs --dir published
+      - name: Verify anonymous public download and fail closed without Rust
+        run: |
+          cp published/native-build.exs published/checksum-Elixir.LanceDB.Native.exs .
+          scripts/validate_consumer.sh

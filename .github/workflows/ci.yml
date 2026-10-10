@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANCEDB_BUILD: 'true'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            target
+          key: ci-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('mix.lock', 'Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ci-ubuntu-24.04-${{ runner.arch }}-
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix credo --strict
+      - run: cargo fmt --all --check
+      - name: Validate committed Cargo lockfile before Rustler runs
+        run: cargo metadata --locked --format-version=1 > /dev/null
+      - run: mix compile --warnings-as-errors
+      - run: mix docs --warnings-as-errors
+      - run: env -u LANCEDB_BUILD mix hex.build
+      - run: git diff --exit-code Cargo.lock
+      - run: cargo test --locked --release -p lancedb_nif
+      - run: mix test --cover --warnings-as-errors
+      - name: Check property replay seeds
+        run: |
+          for property_seed in 0 12345; do
+            mix test --only property --seed "$property_seed" --warnings-as-errors
+          done
+
+  s3:
+    name: MinIO integration
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANCEDB_BUILD: 'true'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            target
+          key: ci-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('mix.lock', 'Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ci-ubuntu-24.04-${{ runner.arch }}-
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: mix deps.get
+      - name: Validate committed Cargo lockfile before Rustler runs
+        run: cargo metadata --locked --format-version=1 > /dev/null
+      - name: Test against MinIO
+        run: scripts/test_s3.sh
+      - run: git diff --exit-code Cargo.lock

@@ -1,0 +1,29 @@
+[package]
+name = "lancedb_nif"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[lib]
+name = "lancedb_nif"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = { version = "0.38.0", default-features = false, features = ["nif_version_2_15"] }
+lancedb = { version = "=0.37.1", features = ["aws", "metrics-otel"] }
+lance = { version = "=10.0.0", default-features = false }
+lance-datafusion = "=10.0.0"
+lance-index = "=10.0.0"
+lance-core = "=10.0.0"
+lance-arrow = "=10.0.0"
+arrow = { version = "58.0.0", features = ["json"] }
+arrow-array = "58.0.0"
+arrow-schema = "58.0.0"
+arrow-json = "58.0.0"
+arrow-cast = "58.0.0"
+tokio = { version = "1.43", features = ["rt-multi-thread", "sync", "macros", "time"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
+lazy_static = "1.5"
+url = "2"
