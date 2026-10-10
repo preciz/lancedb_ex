@@ -26,7 +26,16 @@ defmodule LanceDB.NativeBuildTest do
     refute output =~ "Compiling crate"
   end
 
-  test "macOS targets fail without building Rust", %{cache: cache} do
+  test "only Linux archives are available and Darwin overrides never build Rust", %{cache: cache} do
+    archives = RustlerPrecompiled.available_nifs(LanceDB.Native)
+    assert length(archives) == 2
+
+    for target <- ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) do
+      assert Enum.any?(archives, fn {name, _url} ->
+               String.ends_with?(name, "-nif-2.15-#{target}.so.tar.gz")
+             end)
+    end
+
     for arch <- ["x86_64", "aarch64"] do
       {output, status} =
         compile_native(cache, [
