@@ -12,15 +12,28 @@ case System.argv() do
     archive = Path.join(output, name <> ".tar.gz")
     File.mkdir_p!(output)
 
-    :ok =
-      :erl_tar.create(
-        String.to_charlist(archive),
-        [{String.to_charlist(name), File.read!(library)}],
-        [:compressed]
-      )
+    if File.exists?(archive) or File.exists?(archive <> ".sha256"),
+      do: raise(ArgumentError, "Refusing to replace native build artifact: #{archive}")
 
-    hash = :crypto.hash(:sha256, File.read!(archive)) |> Base.encode16(case: :lower)
-    File.write!(archive <> ".sha256", "#{hash}  #{Path.basename(archive)}\n")
+    temporary = archive <> ".#{System.pid()}.#{System.unique_integer([:positive])}.tmp"
+
+    try do
+      :ok =
+        :erl_tar.create(
+          String.to_charlist(temporary),
+          [{String.to_charlist(name), File.read!(library)}],
+          [:compressed]
+        )
+
+      contents = File.read!(temporary)
+      # Exclusive creation also protects against two packagers racing for an ID.
+      File.write!(archive, contents, [:exclusive])
+      hash = :crypto.hash(:sha256, contents) |> Base.encode16(case: :lower)
+      File.write!(archive <> ".sha256", "#{hash}  #{Path.basename(archive)}\n", [:exclusive])
+    after
+      File.rm(temporary)
+    end
+
     IO.puts(archive)
 
   _ ->

@@ -129,7 +129,8 @@ elixir scripts/checksums.exs /tmp/lancedb-local-artifacts /tmp/lancedb-local-che
 
 Use the matching target and `.dylib` input on macOS. A local archive does
 not substitute for the four-target workflow or its trusted combined
-manifest. Build distributed binaries on their intended minimum OS version.
+manifest. The local packager refuses to replace an existing archive or
+checksum file. Build distributed binaries on their intended minimum OS version.
 
 ## First public package release
 
