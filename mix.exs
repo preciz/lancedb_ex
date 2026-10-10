@@ -47,6 +47,7 @@ defmodule LanceDB.MixProject do
         {:ex_doc, "~> 0.40.4", only: :dev, runtime: false}
       ],
       package: [
+        name: "lancedb_ex",
         licenses: ["Apache-2.0"],
         links: %{"GitHub" => @source_url},
         files:

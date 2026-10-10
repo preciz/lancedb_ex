@@ -37,7 +37,7 @@ After the first public release, add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb, "~> 0.1.0"}
+    {:lancedb, "~> 0.1.0", hex: :lancedb_ex}
   ]
 end
 ```
@@ -50,6 +50,7 @@ mix compile
 ```
 
 A URL override and a supervision tree entry are not necessary.
+The Hex package name is `lancedb_ex`. The OTP application name is `lancedb`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
 default artifact URL. The Elixir package version is `0.1.0`. The package
 pins the SDK version to `=0.37.1`. These versions do not identify the
