@@ -1,13 +1,27 @@
 #!/usr/bin/env bash
 # Fresh consumer verification of public artifacts, without credentials or Rust.
+# Optionally install from an unpacked Hex package instead of the Git checkout.
 set -euo pipefail
 package_root=$(cd "$(dirname "$0")/.." && pwd)
+if [[ "$#" -gt 1 ]]; then
+  echo 'Usage: scripts/validate_consumer.sh [UNPACKED_HEX_PACKAGE_DIRECTORY]' >&2
+  exit 1
+fi
+hex_package=""
+if [[ "$#" -eq 1 ]]; then
+  hex_package=$(cd "$1" && pwd)
+  test -f "$hex_package/mix.exs"
+fi
 validation_root=$(mktemp -d)
 trap 'rm -rf "$validation_root"' EXIT
 mkdir -p "$validation_root/consumer/vendor/lancedb_ex" "$validation_root/bin"
-git -C "$package_root" archive HEAD | tar -x -C "$validation_root/consumer/vendor/lancedb_ex"
-# In publication CI these two files come directly from the trusted build jobs.
-cp "$package_root/native-build.exs" "$package_root/checksum-Elixir.LanceDB.Native.exs" "$validation_root/consumer/vendor/lancedb_ex/"
+if [[ -n "$hex_package" ]]; then
+  cp -R "$hex_package/." "$validation_root/consumer/vendor/lancedb_ex/"
+else
+  git -C "$package_root" archive HEAD | tar -x -C "$validation_root/consumer/vendor/lancedb_ex"
+  # In publication CI these two files come directly from the trusted build jobs.
+  cp "$package_root/native-build.exs" "$package_root/checksum-Elixir.LanceDB.Native.exs" "$validation_root/consumer/vendor/lancedb_ex/"
+fi
 cat > "$validation_root/consumer/mix.exs" <<'MIX'
 defmodule NativeConsumer.MixProject do
   use Mix.Project

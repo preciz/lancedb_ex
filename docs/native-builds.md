@@ -140,6 +140,25 @@ Use the public repository `preciz/lancedb_ex`. First publish and verify the
 two Linux native archives. Commit their matching build and checksum manifests.
 Then update the release status in the README and installation guide.
 
+Commit the release candidate changes and require a clean working tree.
+The selected native build must include every native change in the package.
+Before publication, compare the selected source to the committed release
+candidate. This command must produce no differences:
+
+```sh
+native_source=$(elixir -e '{build, _} = Code.eval_file("native-build.exs"); IO.puts(build.source_revision)')
+git diff --exit-code "$native_source" HEAD -- native Cargo.toml Cargo.lock rust-toolchain.toml .github/workflows/precompile.yml
+```
+
+If it reports changes, build and verify a new immutable native release before
+selecting its manifests. Passing tests with `LANCEDB_BUILD=true` does not
+validate previously published binaries. Run the full Elixir suite with the
+selected binaries in a fresh build directory as well:
+
+```sh
+env -u LANCEDB_BUILD MIX_BUILD_PATH=_build/precompiled-release mix test --cover --warnings-as-errors
+```
+
 Check the package and its documentation before publication:
 
 ```sh
@@ -147,23 +166,37 @@ export LANCEDB_BUILD=true
 mix deps.get
 mix format --check-formatted
 mix credo --strict
+mix compile --warnings-as-errors
 mix test --cover --warnings-as-errors
+cargo fmt --all --check
+cargo clippy --locked --release --all-targets -p lancedb_nif -- -D warnings
+cargo test --locked --release -p lancedb_nif
+scripts/test_s3.sh
 mix docs --warnings-as-errors
 env -u LANCEDB_BUILD mix hex.build --unpack --output /tmp/lancedb-hex-package
-scripts/validate_consumer.sh
+scripts/validate_consumer.sh /tmp/lancedb-hex-package
+env -u LANCEDB_BUILD mix hex.publish --dry-run --yes
 ```
 
 Inspect the unpacked package. It must contain the license, native source,
 Cargo lockfile, public build URL, and matching trusted checksum manifest.
 It must not contain local build outputs or credentials.
+The consumer check above installs the actual unpacked Hex package, downloads
+its selected binary anonymously, and verifies a production application release.
+Review `CHANGELOG.md` and the generated documentation too.
 
 After all checks pass, tag the package source and publish to Hex:
 
 ```sh
-git tag v0.1.0
+git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin main v0.1.0
 env -u LANCEDB_BUILD mix hex.publish
 ```
+
+Require a clean working tree before tagging. If `v0.1.0` already exists,
+check its local and remote revisions. It must identify the final package
+commit, including the selected native manifests. Resolve an older tag before
+publication; do not publish from a different commit under the same tag.
 
 The package tag identifies the Elixir release. The separate native tag
 identifies the compiled wrapper. Building and publishing a native archive
