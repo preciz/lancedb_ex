@@ -1,6 +1,6 @@
 defmodule LanceDB.Execution do
   @moduledoc """
-  Native operation admission. Limits are process-global: at most 64 active reads
+  Native operation admission. Limits apply across the BEAM VM: at most 64 active reads
   and 16 writes by default. A read cursor holds its slot until completion or close;
   read and write budgets are separate so batches can flow between them. Excess
   operations fail immediately with `Error.kind == :busy`. Existing operations
@@ -13,7 +13,7 @@ defmodule LanceDB.Execution do
   input and awaits the native result; cancellation never promises rollback after
   final commit has begun. No table process or connection pool is created.
   """
-  @doc "Sets positive, process-global read and write concurrency limits."
+  @doc "Sets positive read and write concurrency limits across the BEAM VM. Omitted limits revert to their defaults, 64 reads and 16 writes."
   def configure(opts) do
     opts = Keyword.validate!(opts, [:reads, :writes])
     reads = Keyword.get(opts, :reads, 64)

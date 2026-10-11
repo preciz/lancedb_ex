@@ -6,10 +6,12 @@ This package embeds [LanceDB](https://lancedb.com/) in Elixir through Rustler.
 Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
 
-The Elixir package version is `0.1.1`. The Rust software development kit
-(SDK) version is pinned to `0.37.1`. Each native build has a separate immutable ID.
-The selected [native build](docs/installation.md#current-native-build) passed
-public download and production release checks on both supported Linux targets.
+The published Elixir package version is `0.1.0`; this checkout prepares `0.1.1`.
+The Rust software development kit (SDK) is pinned to `0.37.1`. Each native build
+has a separate immutable ID. The [selected native build](docs/installation.md#current-native-build)
+was verified for `0.1.0`. The new native binaries for `0.1.1` are pending;
+use an [explicit source build](docs/native-builds.md#explicit-maintainer-source-builds)
+to run this checkout. The guides describe the current source API.
 
 ## Requirements
 
@@ -26,7 +28,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.1.1"}
+    {:lancedb_ex, "~> 0.1.0"}
   ]
 end
 ```
@@ -80,6 +82,11 @@ IO.inspect(matches)
 Result rows have string keys. Vector search adds a numeric `"_distance"`
 field. Operations return `{:ok, value}` or `{:error, %LanceDB.Error{}}`.
 Incorrect API arguments raise `ArgumentError`.
+
+The current source also supports connection and table-open deadlines, cache
+budgets on the initial connection, and `Table.cache_stats/1`. See
+[table-open controls and cache statistics](docs/tables.md#table-open-controls-and-listing)
+for session sharing, option ranges, and examples.
 
 ## Documentation
 

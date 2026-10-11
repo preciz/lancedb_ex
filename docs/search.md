@@ -30,9 +30,10 @@ text columns.
 `:columns` and `:filter` work as in ordinary queries. The default limit is
 10 rows.
 
-FTS uses the SDK's default analyzer. It applies simple tokenization,
-lowercase conversion, English stemming, and stop-word removal. Plain strings
-are term queries. They are not SQL or a general query language. Use
+Indexed FTS uses the index's saved analyzer settings. The default analyzer
+applies simple tokenization, lowercase conversion, English stemming,
+stop-word removal, and ASCII folding. Unindexed scans use SDK defaults.
+Plain strings are term queries. They are not SQL or a general query language. Use
 `LanceDB.FTS` for structured queries, as described below. Set analyzer
 options during index creation.
 
@@ -387,8 +388,8 @@ For token inspection with a JSON analyzer, use `path,type,value` syntax. For
 example, use `title,str,elixir`.
 
 Full-text and hybrid queries accept `wand_factor`. It must be `nil` or a
-number greater than or equal to 1. A value of 1 keeps exact WAND pruning.
-Larger values permit faster top-k search with lower recall. Builders,
+finite float32-compatible number greater than or equal to 1. A value of 1
+keeps exact WAND pruning. Larger values permit faster top-k search with lower recall. Builders,
 streams, and query diagnostics keep this setting. It does not apply to scans
 or vector-only queries.
 

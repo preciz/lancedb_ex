@@ -76,11 +76,13 @@ After publication, the workflow checks a fresh consumer on each supported
 target. Each consumer starts with an empty NIF cache and no URL overrides.
 Its `PATH` contains neither GitHub CLI nor Rust tools. The consumer has no
 GitHub credentials. It downloads from the default URL, checks the checksum, and
-loads the NIF. It then writes and queries a small LanceDB table.
+loads the NIF. It then connects with initial cache budgets and a deadline,
+writes a small table, reopens it with a deadline, inspects cache statistics,
+and executes a vector query.
 
 The checks include unsupported targets, unavailable downloads, incorrect
 checksums, and missing manifests. These failures must not start Rust. The
-workflow also builds a production release and repeats the write and query.
+workflow also builds a production release and repeats the same API checks.
 That release runs without `gh`, GitHub credentials, Rust, or Cargo.
 
 Use verification mode to repeat consumer checks for a published build. This
@@ -138,7 +140,9 @@ checksum file. Build distributed binaries on their intended minimum OS version.
 
 Use the public repository `preciz/lancedb_ex`. First publish and verify the
 two Linux native archives. Commit their matching build and checksum manifests.
-Then update the release status in the README and installation guide.
+Then update the release status and installation examples in the README and
+installation guide. Remove the changelog's unreleased marker and pending-build
+note only after the new native build passes verification.
 
 Commit the release candidate changes and require a clean working tree.
 The selected native build must include every native change in the package.

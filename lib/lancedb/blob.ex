@@ -1,6 +1,8 @@
 defmodule LanceDB.Blob do
   @moduledoc """
-  Seekable handles for blob values stored in a table. Obtain handles with
+  Seekable handles for blob values stored in a table.
+
+  Obtain handles with
   `LanceDB.Blob.open/3`, using `_rowid` values from a query with
   `with_row_id: true`. Offsets and lengths are bytes, relative to the blob.
 
@@ -62,7 +64,7 @@ defmodule LanceDB.Blob do
     end)
   end
 
-  @doc "A write value referencing an existing object by URI, without copying its bytes."
+  @doc "A blob write value naming an external object URI. Writes retain the reference by default; external_blob_mode: :ingest copies its bytes."
   def reference(uri), do: %LanceDB.Blob.Reference{uri: Options.string!(uri, "blob URI")}
 
   @doc "Reads from the current cursor to EOF, advancing the cursor."

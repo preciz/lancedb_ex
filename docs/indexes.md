@@ -65,7 +65,7 @@ All seven vector index types accept these options:
 
 | Option | Meaning / default |
 | --- | --- |
-| `:distance` | `:l2` (default), `:cosine`, or `:dot`. Match the search metric. |
+| `:distance` | `:l2` (default), `:cosine`, or `:dot` for floating vectors; `:hamming` for uint8 vectors. Match the search metric. |
 | `:num_partitions` | Explicit number of IVF partitions. |
 | `:target_partition_size` | Target rows per partition. The SDK chooses the partition count. Cannot be combined with `:num_partitions`. |
 | `:sample_rate` | IVF training sample multiplier per partition. The default is 256. The SDK also uses it for SQ training. |
@@ -252,6 +252,11 @@ You can share jobs between processes. They continue after caller exit or
 garbage collection. They keep their completion result for repeated waits. A
 wait timeout leaves the job running. `Job.cancel/1` requests cancellation.
 `Job.wait/2` reports the terminal outcome.
+
+`Job.wait/2` accepts `timeout_ms: nil` (the default, wait indefinitely), or a
+non-negative uint32 millisecond count. Zero checks without waiting. Pending
+waits run on Tokio and reply by message, retaining no BEAM scheduler. These
+wait deadlines differ from `Index.wait/3`, which polls table index readiness.
 
 Cancellation cannot undo an already completed index. The write admission
 slot stays held until the native job finishes. Explicit scalar index types

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1
+## 0.1.1 (unreleased)
 
 - Add `LanceDB.Table.cache_stats/1` for the handle's actual session: index and
   metadata cache usage, entries, hits, and misses, without a global recorder.
@@ -15,9 +15,9 @@
 - Document actual session sharing, cancellation limits, and reproducible
   local/MinIO connect and open benchmarks.
 
-Requires the new native build selected in this release. Normal installation
-downloads its verified Linux x86_64 or ARM64 binary without compiling Rust.
-LanceDB SDK 0.37.1 and platform requirements are unchanged.
+Requires a new verified Linux x86_64 and ARM64 native build before publication.
+That build has not yet been selected; use `LANCEDB_BUILD=true` for this source
+candidate. LanceDB SDK 0.37.1 and platform requirements are unchanged.
 
 ## 0.1.0
 

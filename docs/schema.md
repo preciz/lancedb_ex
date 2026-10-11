@@ -364,7 +364,8 @@ operations accept nested field paths. See schema evolution below.
 
 Without an explicit schema, numeric lists use vector inference. Define an
 explicit schema for variable-length lists and structs. Lists of vectors
-support `multivector_search/3` with cosine distance. See below.
+support `multivector_search/3` with cosine distance. See
+[batch and multivector search](queries.md#batch-and-multivector-search).
 
 ### Timestamps
 
@@ -552,7 +553,7 @@ separate commits. They do not form one migration transaction.
 Attach metadata at creation, independently of row values:
 
 ```elixir
-{:ok, table} = LanceDB.Connection.create_empty_table(conn, "annotated", [
+{:ok, table} = LanceDB.Connection.create_empty_table(db, "annotated", [
   %{name: :id, type: :int64, metadata: %{description: "Document ID"}},
   {:details, {:struct, [%{name: :label, type: :string, metadata: %{language: "en"}}]}}
 ], schema_metadata: %{owner: "search-team"})

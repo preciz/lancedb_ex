@@ -13,7 +13,13 @@ defmodule LanceDB.Job do
   def status(%__MODULE__{} = job),
     do: LanceDB.Execution.run(:job_status, fn -> LanceDB.Backend.job_status(job) end)
 
-  @doc "Waits for completion, returning {:ok, :created}; timeout_ms only bounds this wait."
+  @doc """
+  Waits for completion, returning `{:ok, :created}` or the job's terminal error.
+  `:timeout_ms` is nil (wait indefinitely) or a non-negative uint32 millisecond
+  count; zero checks without waiting. A timeout bounds this wait and leaves
+  the job running. Native waits use Tokio and reply without retaining a BEAM
+  scheduler. A completed result is available to subsequent waits.
+  """
   def wait(%__MODULE__{} = job, opts \\ []) do
     opts = Keyword.validate!(opts, [:timeout_ms])
     timeout = opts[:timeout_ms]

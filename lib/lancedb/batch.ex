@@ -3,6 +3,7 @@ defmodule LanceDB.Batch do
 
   @moduledoc """
   An immutable native Arrow record batch. Batches may be shared between processes.
+
   `Query.stream_batches/2` and `Table.add/3` with `Source.batches/2` transfer compatible batches without row
   serialization. Conversion to Elixir maps is explicit through `to_rows/1`.
   Retaining a batch retains its Arrow buffers, including buffers shared by slices.

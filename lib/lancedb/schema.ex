@@ -34,9 +34,10 @@ defmodule LanceDB.Schema do
   Lance 10 cannot store a null struct with required children, including through
   nested struct fields. Supply a complete struct or make its child fields nullable.
   Lance 10 also cannot cast struct update literals to required child fields;
-  use upsert or merge_insert with complete records for those columns. This also
-  applies to field names that cannot round trip through Arrow's SQL type parser,
-  such as double-quoted names; literal updates reject them before execution.
+  use `LanceDB.Table.upsert/3` or `LanceDB.Table.merge/3` with complete records
+  for those columns. This also applies to field names that cannot round trip
+  through Arrow's SQL type parser, such as double-quoted names; literal updates
+  reject them before execution.
   Literal updates replace whole top-level collections; nested-path updates are
   not exposed. Schema evolution supports nested rename/drop/nullability changes.
 

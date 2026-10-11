@@ -4,9 +4,15 @@
 
 ## API migration
 
-This package has no public package release. Earlier checkouts used separate
-entry points for query sources and input formats. Use the current operations
-below when you update callers.
+Version `0.1.0` established the API below. Earlier, pre-release checkouts used
+separate entry points for query sources and input formats. Use these operations
+when updating callers from those checkouts. Both `Query.new/2` and `new/3`
+take the table first: `Query.new(table, opts)` or
+`Query.new(table, source, opts)`.
+
+The `0.1.1` source candidate adds optional connect/open deadlines, initial
+connection cache budgets, and `Table.cache_stats/1`; existing API signatures
+remain compatible. See [table-open controls](tables.md#table-open-controls-and-listing).
 
 | Previous entry point | Current entry point |
 | --- | --- |

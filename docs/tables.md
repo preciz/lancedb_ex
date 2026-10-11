@@ -142,9 +142,9 @@ data and index files with a source table:
 
 ```elixir
 {:ok, source_uri} = LanceDB.Table.uri(table)
-{:ok, copy} = LanceDB.Connection.clone_table(conn, "copy", source_uri)
-{:ok, old_copy} = LanceDB.Connection.clone_table(conn, "old_copy", source_uri, source_version: 1)
-{:ok, saved_copy} = LanceDB.Connection.clone_table(conn, "saved_copy", source_uri, source_tag: "saved")
+{:ok, copy} = LanceDB.Connection.clone_table(db, "copy", source_uri)
+{:ok, old_copy} = LanceDB.Connection.clone_table(db, "old_copy", source_uri, source_version: 1)
+{:ok, saved_copy} = LanceDB.Connection.clone_table(db, "saved_copy", source_uri, source_tag: "saved")
 ```
 
 `source_version` selects a version on main. A source tag can identify a
@@ -158,6 +158,10 @@ clone. A shallow clone cannot serve as an independent backup. The package
 does not expose deep cloning or branch diff and merge.
 
 ## Table-open controls and listing
+
+Connect/open deadlines, initial connection cache budgets, and cache statistics
+are additions in the `0.1.1` source candidate. See
+[installation](installation.md#current-native-build) for the required native build.
 
 Both connection and table opens accept an optional `timeout_ms`:
 
@@ -203,6 +207,8 @@ Opening a snapshot does not change other handles.
 
 Storage options override the connection's options for the opened table.
 Either cache limit creates a dedicated native session for that handle.
+Budgets must be integer byte counts from 0 through 9,223,372,036,854,775,807;
+omit an option to use its default rather than passing `nil`.
 Snapshots and branch checkouts preserve it; branch creation uses a new SDK
 session. The dedicated session keeps connection storage and
 read-consistency settings. The other cache keeps its SDK default. Zero
@@ -258,6 +264,10 @@ Snapshots and branch checkouts share their source session; creating a branch
 uses a new SDK session. Resolving the
 session follows read consistency and may check storage. The result contains
 no URI, credentials, or storage options.
+
+These cache statistics differ from `Maintenance.stats/1`, which describes
+stored table files and rows, and `Telemetry.snapshot/0`, which reads opt-in
+process-global native metrics.
 
 ## Table maintenance
 

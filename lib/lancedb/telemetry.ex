@@ -16,6 +16,10 @@ defmodule LanceDB.Telemetry do
   cumulative values across all connections in this NIF. It does not reset when
   read. An incompatible existing native recorder produces an error.
 
+  For session-local index and metadata cache statistics, use
+  `LanceDB.Table.cache_stats/1`; that API needs no global recorder and reports
+  the table's actual session, including any other handles sharing its caches.
+
   `poll/0` emits one `[:lancedb, :native, :metric]` event per metric series. Scalar
   measurements contain `:value`; histogram measurements contain `:count` and
   `:sum`. Metadata contains `:name`, `:kind`, `:attributes`, and histogram

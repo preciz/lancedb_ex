@@ -93,7 +93,8 @@ defmodule LanceDB.Index do
   `:fts` accepts an `:analyzer`
   keyword list (tokenizer, language, normalization, positions, token length, and
   n-gram settings, custom_stop_words, document_tokenizer (:text/:json), and code
-  splitting flags; see README). FTS build controls are `:block_size` (128/256),
+  splitting flags; see the [analyzer guide](search.md#configurable-fts-analyzers)).
+  FTS build controls are `:block_size` (128/256),
   positive uint32 `:memory_limit_mb` and `:num_workers`, and `:format_version`
   (`:v1`, `:v2`, `:v3`). Code tokenization and 256-document blocks require V3;
   omitted format selects it automatically when needed. Explicit scalar indexes accept `train: false`

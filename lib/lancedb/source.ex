@@ -6,8 +6,11 @@ defmodule LanceDB.Source do
 
   `rows/2` consumes an enumerable of maps in bounded chunks. `batches/2` consumes
   native Arrow batches without converting them to rows. Supply `schema:` when
-  creating a table; existing-table writes use the stored schema and reject incompatible explicitly supplied source fields. Conflicting source and creation schemas raise before input is consumed. Sources are
-  lazy and run in the calling process. Reuse requires a repeatable enumerable.
+  creating a table, either on the Source or as the creation operation's option;
+  existing-table writes use the stored schema and reject incompatible explicitly
+  supplied source fields. Conflicting source and creation schemas raise before
+  input is consumed. Sources are lazy and run in the calling process. Reuse
+  requires a repeatable enumerable.
   Commit policy belongs to the write operation, independently of chunk size.
   """
   alias LanceDB.{Batch, Schema}

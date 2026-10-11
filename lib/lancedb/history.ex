@@ -22,6 +22,7 @@ defmodule LanceDB.History do
   @doc """
   Returns an independent read-only handle pinned to the given version.
   The source handle and other processes using it are unchanged.
+  The snapshot retains the source session and shares its caches and counters.
   """
   @spec snapshot(table(), pos_integer()) :: result(table())
   def snapshot(table, version) do
@@ -80,7 +81,7 @@ defmodule LanceDB.History do
 
   @doc """
   Resolves a tag and returns an independent read-only handle. Moving or deleting
-  the tag later does not change that snapshot.
+  the tag later does not change that snapshot. It retains the source session.
   """
   @spec snapshot_tag(table(), String.t()) :: result(table())
   def snapshot_tag(table, name) do
@@ -92,6 +93,7 @@ defmodule LanceDB.History do
   @doc """
   Returns a new live handle on the same branch, observing the latest version.
   The source handle remains unchanged, including when it is a pinned snapshot.
+  The new handle retains the source session and read-consistency configuration.
   """
   @spec latest(table()) :: result(table())
   def latest(table) do

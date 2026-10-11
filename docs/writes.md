@@ -140,7 +140,8 @@ results](#ingestion-controls-and-write-results).
 ## Upserts and updates
 
 `upsert/3` inserts new rows and replaces rows that match the `:on` columns.
-It uses one merge operation. The default key is `:id`:
+It uses one merge operation. The default key is `:id`; `:timeout_ms` and
+`:use_index` follow the [conditional merge controls](#conditional-merges):
 
 ```elixir
 {:ok, %{inserted: inserted, updated: updated}} =
@@ -179,7 +180,8 @@ no rows match.
 
 Literal values can be strings, binaries, integers, floats, booleans, `nil`,
 vectors, lists, struct maps, or `Calendar.ISO` date or date-time structs.
-Timestamp literals use the precision and timezone rules below. The operation
+Timestamp literals use the [precision and timezone rules](schema.md#timestamps).
+The operation
 escapes strings as SQL literals. It checks literal types and vector
 dimensions against the table schema before writing.
 
@@ -252,8 +254,10 @@ uniqueness constraint.
 
 Results are `LanceDB.WriteResult` structs with `:inserted`, `:updated`,
 `:deleted`, `:version`, and `:attempts` fields. `:timeout_ms` is a
-positive integer in milliseconds. If you do not set a timeout, the SDK
-default applies. `:use_index` defaults to true and controls the join-key
+positive uint32 integer in milliseconds (at most 4,294,967,295); explicit
+`nil` is invalid. If you omit the option, the SDK default applies. This is
+the SDK merge timeout, separate from query and connect/open deadlines.
+`:use_index` defaults to true and controls the join-key
 index. Do not insert untrusted text into SQL expressions. Invalid options
 raise `ArgumentError`.
 
@@ -361,7 +365,7 @@ batches = table |> Query.new(limit: nil) |> Query.stream_batches(batch_size: 256
 
 `Connection.create_table/4` accepts `Source.rows/2` or `Source.batches/2`
 with an explicit schema. Creation supports `:create`, `:overwrite`,
-`:exist_ok`, schema metadata, and the creation controls described above.
+`:exist_ok`, schema metadata, and the [creation controls](schema.md#creation-controls).
 Empty input creates an empty table. `:exist_ok` can return the existing
 table without consuming the source.
 

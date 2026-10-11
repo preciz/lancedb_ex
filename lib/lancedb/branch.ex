@@ -9,6 +9,8 @@ defmodule LanceDB.Branch do
   `:from` defaults to `:current` (the handle's visible version), or accepts a
   version on the current branch, `{:tag, name}`, `{:branch, name}`, or
   `{:branch, name, version}`. Historical handles cannot create branches.
+  The pinned SDK creates a new session with default cache budgets for the
+  returned branch; it does not retain the source session's configured budgets.
   """
   @spec create(table(), String.t(), keyword()) :: result(table())
   def create(table, name, opts \\ []) do
@@ -22,8 +24,10 @@ defmodule LanceDB.Branch do
 
   @doc """
   Opens a separate handle on a branch, leaving `table` unchanged. `:version`
-  pins the new handle read-only; omitted, it tracks the branch's latest version.
-  Use `"main"` to return a handle on the main branch.
+  pins the new handle read-only; omitted, it opens a live handle at the branch's
+  latest version. Later changes follow the handle's read-consistency policy.
+  Use `"main"` to return a handle on the main branch. Checkout preserves the
+  source handle's native session and cache budgets.
   """
   @spec open(table(), String.t(), keyword()) :: result(table())
   def open(table, name, opts \\ []) do

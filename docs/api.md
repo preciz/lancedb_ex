@@ -9,9 +9,10 @@ and `Blob` for the other operations. `LanceDB.connect` calls
 
 ## API model
 
-This package has no public package release. The public API uses typed
-connection and table handles, reusable queries and schemas, and error and
-write result structs. See [API migration](migration.md#api-migration) for changes from earlier checkouts.
+The public API uses typed connection and table handles, reusable queries and
+schemas, and error and write result structs. These guides describe the current
+source; see [installation](installation.md#installation) for release status and
+[API migration](migration.md#api-migration) for changes from earlier checkouts.
 
 ```elixir
 alias LanceDB.{Batch, Query, Schema, Table}
@@ -106,11 +107,15 @@ IO.inspect(matches)
 
 `connect/0` uses `"./lancedb"` by default. Connections and tables are native
 resource handles. The BEAM garbage collector releases these handles. Native
-operations share a Tokio runtime. Most native calls use dirty schedulers. In
-the current source, cursor requests wait on Tokio and send results by
-message.
+operations share a Tokio runtime. Connect, table open, cursor requests, job
+waits, and writer cleanup run native waits on Tokio and reply by message,
+leaving BEAM schedulers available. Many other native calls use dirty schedulers
+and can retain one while waiting for storage.
 
-These waits do not hold a BEAM scheduler.
+The current source accepts `:timeout_ms` and session cache budgets in the third
+argument to `connect/3`. Table opening accepts its own deadline and per-open
+cache budgets. See [table-open controls](tables.md#table-open-controls-and-listing)
+for options, cancellation limits, and `Table.cache_stats/1`.
 
 ## Records and search
 
@@ -127,10 +132,13 @@ schema:
 infer them.
 
 Appends and upserts validate records against the stored schema, as described
-above. Search uses LanceDB's default vector-column selection unless you
-supply `:vector_column`. Supply your own embeddings.
+above. Without `:vector_column`, search selects the unique column compatible
+with the search mode and query dimension. Multiple matches require an explicit
+column; dimension mismatches report the query and expected dimensions.
+Supply your own embeddings.
 
-Search supports `:l2` (default), `:cosine`, and `:dot` distances. It
+Search supports `:l2` (default), `:cosine`, and `:dot` distances for floating
+vectors, and `:hamming` for uint8 vectors. It
 accepts a positive `:limit` (default 10) and an optional SQL `:filter`. SQL
 predicates pass directly to LanceDB. Construct these expressions safely.
 
@@ -170,7 +178,11 @@ methods enter their canonical span once. Successful events do not include
 records, SQL, credentials, or table handles. Exception metadata can contain
 user data in reasons or stacktraces.
 
-Native storage metrics are opt-in:
+For the current source's per-session index and metadata cache counters, use
+`LanceDB.Table.cache_stats/1`. It requires no metrics recorder and reports the
+session actually used by the table. See [cache statistics](tables.md#table-open-controls-and-listing)
+for shared-session scope and fields. The following metrics instead accumulate
+across all connections in the native library. Native storage metrics are opt-in:
 
 ```elixir
 :ok = LanceDB.Telemetry.enable_native_metrics() # before opening connections

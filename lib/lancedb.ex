@@ -1,7 +1,9 @@
 defmodule LanceDB do
   @moduledoc """
-  Embedded LanceDB for Elixir. Use Connection for databases, Table for data and
-  history, Query for reads, and Index for indexes. Source describes write input.
+  Embedded LanceDB for Elixir. Use `LanceDB.Connection` for databases,
+  `LanceDB.Table` for rows and cache statistics, `LanceDB.Query` for reads,
+  and `LanceDB.Index` for indexes. `LanceDB.History` and `LanceDB.Branch` manage
+  versions and branches. `LanceDB.Source` describes write input.
   """
   @type result(value) :: {:ok, value} | {:error, LanceDB.Error.t()}
   @doc "Connects to local or object storage. See LanceDB.Connection.connect/3."

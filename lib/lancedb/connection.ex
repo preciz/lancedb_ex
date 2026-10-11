@@ -10,20 +10,33 @@ defmodule LanceDB.Connection do
   alias LanceDB.Options
 
   @doc """
-  Connects to local or object storage. Storage options are passed to the SDK.
+  Connects to local or object storage, defaulting to `"./lancedb"`.
+  The second argument is a storage-options map passed to the SDK; the third
+  is a keyword list of wrapper options:
 
-  `:read_consistency_interval_ms` is nil or a non-negative uint32 interval.
-  `:index_cache_size_bytes` and `:metadata_cache_size_bytes` configure the
-  connection's session on its initial SDK connection. Either option creates
-  that session with the other cache's SDK default; zero disables a cache.
-  Budgets are shared by tables created or opened on this connection, not per
-  table or limits on total native memory. Use separate connections for independent
-  sessions. Per-open cache options still select a separate session.
-  `:timeout_ms` is nil (no wrapper deadline) or a positive uint32 millisecond
-  deadline for the full native connection. Expiry returns `Error.kind == :timeout`.
-  Native work yields BEAM schedulers and cancels on caller death. Cancellation
-  is cooperative: synchronous SDK work cannot be preempted, and SDK storage
-  tasks may finish after the caller's operation ends.
+  * `:read_consistency_interval_ms` — `nil` (SDK default) or an integer from
+    0 through 4,294,967,295 milliseconds. Zero checks for external changes on
+    every read; a positive interval checks on reads after that interval.
+    The default does not automatically refresh after other handles write.
+    Historical handles stay pinned. Use `LanceDB.History.latest/1` to refresh.
+  * `:index_cache_size_bytes`, `:metadata_cache_size_bytes` — integer byte
+    counts from 0 through 9,223,372,036,854,775,807. Omit either option to use
+    its SDK default; explicit `nil` is invalid. Either option configures the
+    session on the initial SDK connection; zero disables the selected cache.
+  * `:timeout_ms` — `nil` (no wrapper deadline) or a positive uint32 millisecond
+    deadline for the full native connection. Expiry returns an error with
+    `LanceDB.Error.kind == :timeout`.
+
+  Tables created or opened without per-open cache budgets share this session.
+  Use separate connections for independent sessions. Per-open cache options
+  select a separate session with SDK defaults for omitted budgets. Budgets
+  limit session caches, not total native memory. Inspect actual usage with
+  `LanceDB.Table.cache_stats/1`.
+
+  Native connection work runs on Tokio; the caller waits by message without
+  retaining a BEAM scheduler. Caller death cancels the operation. Cancellation
+  is cooperative: synchronous SDK work cannot be preempted, and separately
+  spawned SDK tasks may outlive the operation.
   """
   @spec connect(String.t(), map(), keyword()) :: result(connection())
   def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ [])
@@ -147,13 +160,26 @@ defmodule LanceDB.Connection do
   end
 
   @doc """
-  Opens a table. Options: branch, version, location, storage_options,
-  index_cache_size_bytes, metadata_cache_size_bytes and timeout_ms.
+  Opens a table, sharing the connection's session unless cache budgets are set.
 
-  `:timeout_ms` is nil or a positive uint32 millisecond deadline covering the
-  entire native open, including a dedicated cache session's connection.
-  Expiry returns `Error.kind == :timeout`. Native work yields BEAM schedulers
-  and cancels on caller death, with the cooperative limits of `connect/3`.
+  * `:branch` — branch name; defaults to `"main"`.
+  * `:version` — positive version on that branch, pinning a read-only handle.
+  * `:location` — explicit table URI, including custom creation locations.
+  * `:storage_options` — a map merged over the connection's storage options.
+  * `:index_cache_size_bytes`, `:metadata_cache_size_bytes` — the same byte
+    ranges as `connect/3`. Either option creates a dedicated session. The
+    omitted cache uses its SDK default, rather than the connection's budget.
+    Zero disables that cache; explicit `nil` is invalid. The new session
+    keeps the connection's storage and read-consistency configuration.
+  * `:timeout_ms` — `nil` or a positive uint32 millisecond deadline covering
+    the entire native open, including a dedicated session's connection setup.
+
+  Opening a table does not change other handles. Snapshots and branch checkouts
+  retain the opened handle's session; branch creation uses a new SDK session.
+  `LanceDB.Table.cache_stats/1` reports the actual session's usage and counters.
+  Expiry returns an error with `LanceDB.Error.kind == :timeout`. Native work
+  runs on Tokio and cancels on caller death, with the cooperative limits of
+  `connect/3`.
   """
   @spec open_table(connection(), String.t(), keyword()) :: result(table())
   def open_table(conn, name, opts \\ []) do

@@ -3,10 +3,17 @@ defmodule LanceDB.Query do
 
   @moduledoc """
   Pure, reusable queries. Construction validates options without accessing storage.
+
   `all/1`, `stream/2`, `stream_batches/2`, `explain/2`, `analyze/1` and `schema/1`
   execute the same query. Scan limits default to 100; use `limit(query, nil)` for
   an unlimited scan. Searches default to 10 results. Re-execution of a live table
   may observe new data; use a table snapshot for repeatable reads.
+
+  Both constructors take the table first: `new(table, opts)` builds a scan;
+  `new(table, source, opts)` selects an explicit source. Immediate helpers such
+  as `search/3` and `query/2` execute these same query values. Result maps have
+  string keys; operational failures return `LanceDB.Error`, and stream failures
+  raise it during enumeration.
   """
   @enforce_keys [:table]
   defstruct [:table, :definition]
@@ -75,14 +82,25 @@ defmodule LanceDB.Query do
   @doc "Sets the result offset."
   @spec offset(t(), non_neg_integer()) :: t()
   def offset(query, offset), do: options(query, offset: offset)
-  @doc "Sets a cooperative execution deadline in milliseconds."
+
+  @doc """
+  Sets a cooperative execution deadline: nil disables it, otherwise supply a
+  positive uint32 millisecond count. For streams it covers the cursor lifetime,
+  including consumer pauses; it does not interrupt the caller's Elixir code.
+  """
   @spec timeout(t(), pos_integer() | nil) :: t()
   def timeout(query, milliseconds), do: options(query, timeout_ms: milliseconds)
 
   @doc "Collects the complete query result in memory."
   @spec all(t()) :: LanceDB.result([map()])
   def all(%__MODULE__{} = query), do: execute(query.table, plan(query), :execute)
-  @doc "Builds a lazy row stream; each enumeration executes the query again."
+
+  @doc """
+  Builds a lazy row stream; each enumeration executes the query again.
+  The only stream option is `:batch_size` (default 1024); query controls belong
+  to the query value. Batches bound returned rows, not query memory. Ending or
+  halting enumeration closes the cursor and releases its read admission slot.
+  """
   @spec stream(t(), keyword()) :: Enumerable.t()
   def stream(%__MODULE__{} = query, opts \\ []), do: read_stream(query, opts, :rows)
 
@@ -120,11 +138,27 @@ defmodule LanceDB.Query do
 
   defp plan(query), do: Request.compile(query.definition)
 
-  @doc "Constructs a query from an explicit source and controls. Sources are :scan, {:vector, values}, {:text, text}, {:hybrid, values, text}, {:batch, vectors}, {:multivector, vectors}, or {:take, :row_ids | :row_offsets, values}."
+  @doc """
+  Constructs a query from a table, explicit source, and keyword controls.
+
+  Sources are `:scan`, `{:vector, values}`, `{:text, text}`,
+  `{:hybrid, values, text}`, `{:batch, vectors}`, `{:multivector, vectors}`,
+  `{:take, :row_ids, values}`, or `{:take, :row_offsets, values}`.
+  Each source accepts its corresponding immediate API's options.
+  See the [query guide](queries.md) and [search guide](search.md).
+  Construction validates arguments without accessing storage.
+  """
   @spec new(LanceDB.Table.t(), term(), keyword()) :: t()
   def new(%LanceDB.Table{} = table, source, opts), do: build(table, source, opts)
 
-  @doc "Runs a vector query immediately."
+  @doc """
+  Runs a vector query immediately, returning up to 10 rows by default.
+  Without `:vector_column`, selects the unique column compatible with the search
+  mode and query dimension. Ambiguous matches require an explicit column;
+  dimension mismatches return an error naming the query and expected dimensions.
+  See the [search controls](queries.md#search-controls) for projection, filtering,
+  distances, index tuning, and deadlines.
+  """
   @spec search(LanceDB.Table.t(), [number()], keyword()) :: LanceDB.result([map()])
   def search(table, vector, opts \\ []), do: all(new(table, {:vector, vector}, opts))
 
@@ -153,10 +187,22 @@ defmodule LanceDB.Query do
   @doc "Collects a scan immediately. Use new/2 for a reusable query."
   @spec query(LanceDB.Table.t(), keyword()) :: LanceDB.result([map()])
   def query(table, opts \\ []), do: all(new(table, opts))
-  @doc "Retrieves rows by internal ID."
+
+  @doc """
+  Retrieves rows by internal ID. IDs are non-negative uint64 integers from
+  `_rowid`, not application keys. Accepts `:columns` or `:select`, `:with_row_id`,
+  and `:timeout_ms`; there is no default row limit. Missing IDs contribute no
+  rows, duplicates do not repeat rows, and output order is unspecified. Collect
+  and use IDs against the same table version.
+  """
   @spec take_row_ids(LanceDB.Table.t(), [non_neg_integer()], keyword()) :: LanceDB.result([map()])
   def take_row_ids(table, ids, opts \\ []), do: all(new(table, {:take, :row_ids, ids}, opts))
-  @doc "Retrieves rows by physical offset."
+
+  @doc """
+  Retrieves rows by non-negative uint64 physical offsets, with the same options
+  and result-set semantics as `take_row_ids/3`. Updates, deletions, and compaction
+  can change offsets; use the same table version for collection and retrieval.
+  """
   @spec take_offsets(LanceDB.Table.t(), [non_neg_integer()], keyword()) :: LanceDB.result([map()])
   def take_offsets(table, offsets, opts \\ []),
     do: all(new(table, {:take, :row_offsets, offsets}, opts))

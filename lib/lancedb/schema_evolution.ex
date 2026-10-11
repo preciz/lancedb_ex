@@ -74,7 +74,12 @@ defmodule LanceDB.SchemaEvolution do
     )
   end
 
-  @doc "Adds columns from an explicit source in physical row order, optionally guarding expected_version."
+  @doc """
+  Adds columns from a Source with an explicit output schema in physical row order.
+  Supply one output row per visible row, excluding deleted rows. The optional
+  positive `:expected_version` guards against changes to the target version.
+  Row counts and successful source EOF are checked before committing.
+  """
   @spec add_from_source(t(), LanceDB.Source.t(), keyword()) ::
           result(LanceDB.WriteResult.t())
   def add_from_source(table, source, opts \\ []) do
@@ -89,6 +94,10 @@ defmodule LanceDB.SchemaEvolution do
   Maps snapshot batches to new columns, preserving row count and order.
 
   The output schema accepts a `LanceDB.Schema` or a list of field definitions.
+  The mapper runs in the caller and returns a native Batch or row list for the
+  new columns. `:read_columns` selects input fields; `:batch_size` defaults to
+  1024. The operation guards the snapshot version and checks successful source
+  EOF before committing. Returns a `LanceDB.WriteResult`.
   """
   @spec backfill_columns(
           t(),

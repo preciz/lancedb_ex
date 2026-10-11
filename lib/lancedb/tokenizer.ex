@@ -4,6 +4,12 @@ defmodule LanceDB.Tokenizer do
   alias LanceDB.Backend
   import LanceDB.Options, only: [column_name!: 1]
 
+  @doc """
+  Inspects tokens using an analyzer keyword list, with the same options as
+  FTS index creation. Returns maps with string keys `"text"` and `"position"`;
+  positions start at zero and can have gaps after stop-word removal.
+  Empty text is accepted. Invalid UTF-8 or options raise `ArgumentError`.
+  """
   def tokenize(text, analyzer \\ []),
     do: LanceDB.Execution.run(:tokenize, fn -> do_tokenize(text, analyzer) end)
 
@@ -13,6 +19,12 @@ defmodule LanceDB.Tokenizer do
     decode(Backend.tokenize(text, options))
   end
 
+  @doc """
+  Inspects tokens with a table index's saved analyzer, including on a snapshot.
+  Supply exactly one selector, `:index` or `:column`, as a string or atom.
+  Column selection requires exactly one FTS index. Missing, ambiguous, or
+  non-FTS indexes return an error. The operation changes neither table nor index.
+  """
   def tokenize(table, text, opts),
     do: LanceDB.Execution.run(:tokenize, fn -> do_tokenize(table, text, opts) end)
 

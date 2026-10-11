@@ -23,9 +23,10 @@ defmodule LanceDB.Table do
   does not expose configured capacity. Usage is not total native memory or RSS.
 
   Statistics cover the actual session used by the handle, including other
-  handles sharing it. Explicit table-open cache budgets create an isolated
-  session. Snapshots and branch checkouts preserve their source session; branch
-  creation uses a new SDK session. Reads do not reset counters. Concurrent
+  handles sharing it. Tables created or opened on one connection share its
+  session unless per-open budgets are supplied. Explicit table-open cache budgets
+  create an isolated session. Snapshots and branch checkouts preserve their
+  source session; branch creation uses a new SDK session. Reads do not reset counters. Concurrent
   activity can change fields during a snapshot.
 
   Resolving the session follows the handle's read-consistency configuration
@@ -62,7 +63,9 @@ defmodule LanceDB.Table do
     errors; only the API result confirms a successful commit. Progress describes
     native work, not committed rows. The recipient should drain its mailbox.
 
-  Overwrite retains the stored schema. Invalid records fail before writing.
+  Overwrite retains the stored schema and requires `commit: :once`. Each input
+  batch is validated before writing. With `commit: :batch`, later invalid input
+  leaves confirmed earlier commits in place; error details report that progress.
   """
   @spec add(table(), [map()] | LanceDB.Source.t(), keyword()) :: result(LanceDB.WriteResult.t())
   def add(table, records, opts \\ []) do
@@ -122,6 +125,7 @@ defmodule LanceDB.Table do
   this operation does not add a uniqueness constraint or deduplicate old rows.
 
   Returns a WriteResult with insertion/update counts and the committed version.
+  Also accepts the SDK `:timeout_ms` and `:use_index` controls from `merge/3`.
   """
   @spec upsert(table(), [map()] | LanceDB.Source.t(), keyword()) ::
           result(LanceDB.WriteResult.t())
@@ -141,7 +145,8 @@ defmodule LanceDB.Table do
     * `:when_matched_update_all` - `true`, `false`, or an SQL string / `LanceDB.Expr` condition
     * `:when_not_matched_insert_all` - Boolean
     * `:when_not_matched_by_source_delete` - `true`, `false`, or an SQL string / `LanceDB.Expr` condition
-    * `:timeout_ms` - Positive timeout in milliseconds; otherwise SDK default
+    * `:timeout_ms` - Positive uint32 timeout in milliseconds; omit for the
+      SDK default. Explicit nil is invalid. This is separate from query deadlines.
     * `:use_index` - Use the join-key index (default true)
 
   Update conditions may refer to `source.column` and `target.column`. Deletion

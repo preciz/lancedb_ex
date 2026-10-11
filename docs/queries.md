@@ -209,8 +209,11 @@ deadline across both channels and RRF fusion. A timeout returns
 response can arrive after the deadline.
 
 Native work that does not yield, JSON conversion, and BEAM scheduling can
-delay the response. These timeouts apply to query calls. They do not apply
-to writes, maintenance, or `count_rows/2`.
+delay the response. This query deadline does not apply to writes, maintenance,
+or `count_rows/2`. Connect and table open have their own optional deadlines;
+see [table-open controls](tables.md#table-open-controls-and-listing). Merge
+and upsert accept a separate SDK timeout, described in
+[conditional merges](writes.md#conditional-merges).
 
 Examine the physical plan before you run a query:
 
@@ -539,7 +542,7 @@ Cosine is the default and only supported metric.
 ```elixir
 {:ok, documents} =
   LanceDB.Connection.create_table(
-    conn,
+    db,
     "multivector_documents",
     [%{id: 1, embeddings: [[1, 0], [0, 1]]}, %{id: 2, embeddings: [[1, 0]]}],
     schema: [id: :int64, embeddings: {:list, {:vector, 2}}]
