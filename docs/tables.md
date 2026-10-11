@@ -212,6 +212,32 @@ If you do not set either limit, opened tables use the shared connection
 session. These options do not represent arbitrary Rust read callbacks,
 credential providers, or namespace clients.
 
+To configure the session on the initial SDK connection, give the cache
+budgets to `connect/3` and omit them from `open_table/3`:
+
+```elixir
+{:ok, conn} = LanceDB.connect(uri, storage_options,
+  index_cache_size_bytes: 112 * 1024 * 1024,
+  metadata_cache_size_bytes: 16 * 1024 * 1024,
+  read_consistency_interval_ms: 0,
+  timeout_ms: 5_000
+)
+{:ok, table} = LanceDB.Connection.open_table(conn, "docs", timeout_ms: 2_000)
+```
+
+This creates the configured session once, without first creating a default
+SDK connection and then replacing it during open. Each connection owns an
+independent session. Tables created or opened without per-open budgets on
+that connection share its cache capacity. Use one such connection per dataset
+when you need independent budgets. The connection itself does not retain a
+table handle or implement application cache eviction.
+
+Either connection budget selects a configured session; the other cache keeps
+its SDK default, and zero disables a cache. Existing per-open budgets still
+create a separate session, even on a configured connection. Their omitted
+cache keeps its SDK default rather than inheriting the connection's budget.
+All budgets apply per session and do not limit total native memory or RSS.
+
 `LanceDB.Table.cache_stats/1` inspects the handle's actual native session
 without installing the process-global metrics recorder:
 

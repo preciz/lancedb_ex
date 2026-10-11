@@ -55,6 +55,14 @@ try do
   operations = [
     {:connect,
      fn opts -> Connection.connect("s3://probe", Map.delete(options, "aws_region"), opts) end},
+    {:connect,
+     fn opts ->
+       Connection.connect(
+         "s3://probe",
+         Map.delete(options, "aws_region"),
+         [index_cache_size_bytes: 0, metadata_cache_size_bytes: 0] ++ opts
+       )
+     end},
     {:open_table, fn opts -> Connection.open_table(remote_conn, "docs", opts) end},
     {:open_table,
      fn opts ->

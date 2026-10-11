@@ -1,0 +1,383 @@
+{
+  "date": "2026-10-11",
+  "baseline_commit": "1f45a1fc25499ad4f702df79ddfa9123fcf7c844",
+  "comparison": "Issue #3 patch: existing per-open budgets versus initial connection budgets",
+  "platform": "Linux x86_64; AMD Ryzen 7 8845HS (8 cores, 16 threads)",
+  "elixir": "1.20.4",
+  "otp": "29",
+  "rust": "1.99.0 (release)",
+  "lancedb": "0.37.1",
+  "lance": "10.0.0",
+  "minio": "RELEASE.2025-09-07T16-13-09Z",
+  "index_cache_size_bytes": 117440512,
+  "metadata_cache_size_bytes": 16777216,
+  "read_consistency_interval_ms": 0,
+  "rows": 100,
+  "units": "microseconds",
+  "cold": "Fresh SDK connection/session; OS and storage caches not flushed",
+  "warm": "Retained connection after one FTS prewarm; legacy per-open budgets still create a fresh session",
+  "baseline": [
+    {
+      "mode": "legacy",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 112,
+          "p95": 155
+        },
+        "open_us": {
+          "median": 161,
+          "p95": 238
+        },
+        "total_us": {
+          "median": 276,
+          "p95": 391
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 174,
+          "p95": 174
+        },
+        "open_us": {
+          "median": 226,
+          "p95": 226
+        },
+        "total_us": {
+          "median": 400,
+          "p95": 400
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 169,
+          "p95": 255
+        },
+        "total_us": {
+          "median": 169,
+          "p95": 255
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 5892,
+          "p95": 6321
+        },
+        "open_us": {
+          "median": 6948,
+          "p95": 7472
+        },
+        "total_us": {
+          "median": 12852,
+          "p95": 13483
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 5691,
+          "p95": 5691
+        },
+        "open_us": {
+          "median": 6448,
+          "p95": 6448
+        },
+        "total_us": {
+          "median": 12139,
+          "p95": 12139
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 6839,
+          "p95": 7340
+        },
+        "total_us": {
+          "median": 6839,
+          "p95": 7340
+        }
+      }
+    }
+  ],
+  "comparison_samples": [
+    {
+      "mode": "legacy",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 106,
+          "p95": 142
+        },
+        "open_us": {
+          "median": 155,
+          "p95": 216
+        },
+        "total_us": {
+          "median": 263,
+          "p95": 333
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 146,
+          "p95": 146
+        },
+        "open_us": {
+          "median": 209,
+          "p95": 209
+        },
+        "total_us": {
+          "median": 355,
+          "p95": 355
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 166,
+          "p95": 238
+        },
+        "total_us": {
+          "median": 166,
+          "p95": 238
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 103,
+          "p95": 119
+        },
+        "open_us": {
+          "median": 62,
+          "p95": 77
+        },
+        "total_us": {
+          "median": 167,
+          "p95": 195
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 203,
+          "p95": 203
+        },
+        "open_us": {
+          "median": 137,
+          "p95": 137
+        },
+        "total_us": {
+          "median": 340,
+          "p95": 340
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "local",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 21,
+          "p95": 30
+        },
+        "total_us": {
+          "median": 21,
+          "p95": 30
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 5839,
+          "p95": 6589
+        },
+        "open_us": {
+          "median": 6881,
+          "p95": 7595
+        },
+        "total_us": {
+          "median": 12770,
+          "p95": 14011
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 6695,
+          "p95": 6695
+        },
+        "open_us": {
+          "median": 8392,
+          "p95": 8392
+        },
+        "total_us": {
+          "median": 15087,
+          "p95": 15087
+        }
+      }
+    },
+    {
+      "mode": "legacy",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 7711,
+          "p95": 24405
+        },
+        "total_us": {
+          "median": 7711,
+          "p95": 24405
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "cold",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 5609,
+          "p95": 6282
+        },
+        "open_us": {
+          "median": 951,
+          "p95": 1287
+        },
+        "total_us": {
+          "median": 6656,
+          "p95": 7488
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "warm_setup",
+      "iterations": 1,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 5556,
+          "p95": 5556
+        },
+        "open_us": {
+          "median": 1142,
+          "p95": 1142
+        },
+        "total_us": {
+          "median": 6698,
+          "p95": 6698
+        }
+      }
+    },
+    {
+      "mode": "configured",
+      "state": "warm",
+      "iterations": 100,
+      "storage": "s3",
+      "timings": {
+        "connect_us": {
+          "median": 0,
+          "p95": 0
+        },
+        "open_us": {
+          "median": 295,
+          "p95": 353
+        },
+        "total_us": {
+          "median": 295,
+          "p95": 353
+        }
+      }
+    }
+  ]
+}

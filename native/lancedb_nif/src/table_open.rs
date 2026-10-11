@@ -1,7 +1,6 @@
 //! Isolate per-open sessions when cache sizes are explicitly configured.
 use crate::error::Failure;
 use crate::resources::{ConnectionResource, TableResource};
-use lance::{dataset::ReadParams, session::Session};
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,20 +29,14 @@ impl OpenOptions {
         &self,
         resource: &ConnectionResource,
     ) -> Result<Arc<lancedb::Connection>, Failure> {
-        if self.index_cache_size_bytes.is_none() && self.metadata_cache_size_bytes.is_none() {
+        let Some(session) =
+            crate::cache::session(self.index_cache_size_bytes, self.metadata_cache_size_bytes)
+        else {
             return Ok(resource.conn.clone());
-        }
+        };
         // ListingDatabase overwrites ReadParams.session with the connection's
         // session, so builder cache-size setters alone have no effect. Supply
         // a dedicated connection session and preserve its storage/consistency settings.
-        let defaults = ReadParams::default();
-        let session = Arc::new(Session::new(
-            self.index_cache_size_bytes
-                .unwrap_or(defaults.index_cache_size_bytes),
-            self.metadata_cache_size_bytes
-                .unwrap_or(defaults.metadata_cache_size_bytes),
-            Default::default(),
-        ));
         resource.config.connect(Some(session)).await
     }
 
@@ -159,6 +152,28 @@ mod tests {
             assert_eq!(session.index_cache_stats().await.num_entries, 0);
             assert_eq!(session.metadata_cache_stats().await.num_entries, 0);
             assert_eq!(opened.count_rows(None).await.unwrap(), 3);
+
+            // A session configured before the initial connection is used directly
+            // by opens without per-open budgets; no replacement connection is made.
+            let session = crate::cache::session(Some(0), Some(0)).unwrap();
+            let config = resource.config;
+            let conn = config.connect(Some(session.clone())).await.unwrap();
+            let configured = ConnectionResource { conn, config };
+            assert!(Arc::ptr_eq(
+                &OpenOptions::default()
+                    .connection(&configured)
+                    .await
+                    .unwrap(),
+                &configured.conn
+            ));
+            let opened = OpenOptions::default()
+                .open(&configured, "docs")
+                .await
+                .unwrap();
+            assert!(Arc::ptr_eq(
+                &opened.dataset().unwrap().get().await.unwrap().session(),
+                &session
+            ));
         });
     }
 }

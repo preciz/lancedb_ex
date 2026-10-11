@@ -76,4 +76,58 @@ defmodule LanceDB.CacheStatsTest do
       assert stats[name]["size_bytes"] == 0
     end
   end
+
+  test "connection budgets share one session and separate connections stay independent", %{
+    path: path
+  } do
+    budgets = [index_cache_size_bytes: 16 * 1024 * 1024, metadata_cache_size_bytes: 1024 * 1024]
+    {:ok, conn} = LanceDB.connect(path, %{}, budgets)
+    {:ok, independent} = LanceDB.connect(path, %{}, budgets)
+    {:ok, first} = LanceDB.Connection.open_table(conn, "docs")
+    {:ok, shared} = LanceDB.Connection.open_table(conn, "docs")
+    {:ok, created} = LanceDB.Connection.create_table(conn, "other", [%{id: 1}])
+    {:ok, separate} = LanceDB.Connection.open_table(independent, "docs")
+    {:ok, before} = LanceDB.Table.cache_stats(separate)
+    {:ok, :prewarmed} = LanceDB.Index.prewarm(first, "ids")
+    assert {:ok, stats} = LanceDB.Table.cache_stats(first)
+    assert stats["index"]["num_entries"] > 0
+    assert {:ok, ^stats} = LanceDB.Table.cache_stats(shared)
+    assert {:ok, ^stats} = LanceDB.Table.cache_stats(created)
+    assert {:ok, ^before} = LanceDB.Table.cache_stats(separate)
+
+    {:ok, isolated} =
+      LanceDB.Connection.open_table(conn, "docs",
+        index_cache_size_bytes: 0,
+        metadata_cache_size_bytes: 0
+      )
+
+    assert {:ok, isolated_stats} = LanceDB.Table.cache_stats(isolated)
+    assert isolated_stats["index"]["num_entries"] == 0
+    assert isolated_stats["metadata"]["num_entries"] == 0
+    assert {:ok, ^stats} = LanceDB.Table.cache_stats(first)
+  end
+
+  test "initial connection supports zero and partial budgets", %{path: path} do
+    for {opts, disabled} <- [
+          {[index_cache_size_bytes: 0], ["index"]},
+          {[metadata_cache_size_bytes: 0], ["metadata"]},
+          {[index_cache_size_bytes: 0, metadata_cache_size_bytes: 0], ["index", "metadata"]}
+        ] do
+      {:ok, conn} = LanceDB.connect(path, %{}, opts)
+      {:ok, table} = LanceDB.Connection.open_table(conn, "docs")
+      {:ok, :prewarmed} = LanceDB.Index.prewarm(table, "ids")
+      assert {:ok, [%{"id" => 1}]} = LanceDB.Query.query(table, filter: "id = 1")
+      assert {:ok, stats} = LanceDB.Table.cache_stats(table)
+
+      for cache <- ["index", "metadata"] do
+        if cache in disabled do
+          assert stats[cache]["num_entries"] == 0
+          assert stats[cache]["size_bytes"] == 0
+        else
+          assert stats[cache]["num_entries"] > 0
+          assert stats[cache]["size_bytes"] > 0
+        end
+      end
+    end
+  end
 end

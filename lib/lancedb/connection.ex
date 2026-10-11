@@ -13,6 +13,12 @@ defmodule LanceDB.Connection do
   Connects to local or object storage. Storage options are passed to the SDK.
 
   `:read_consistency_interval_ms` is nil or a non-negative uint32 interval.
+  `:index_cache_size_bytes` and `:metadata_cache_size_bytes` configure the
+  connection's session on its initial SDK connection. Either option creates
+  that session with the other cache's SDK default; zero disables a cache.
+  Budgets are shared by tables created or opened on this connection, not per
+  table or limits on total native memory. Use separate connections for independent
+  sessions. Per-open cache options still select a separate session.
   `:timeout_ms` is nil (no wrapper deadline) or a positive uint32 millisecond
   deadline for the full native connection. Expiry returns `Error.kind == :timeout`.
   Native work yields BEAM schedulers and cancels on caller death. Cancellation
@@ -23,7 +29,14 @@ defmodule LanceDB.Connection do
   def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ [])
       when is_binary(uri) and is_map(storage_options) do
     LanceDB.Execution.run(:connect, fn ->
-      opts = Keyword.validate!(opts, [:read_consistency_interval_ms, :timeout_ms])
+      opts =
+        Keyword.validate!(opts, [
+          :read_consistency_interval_ms,
+          :timeout_ms,
+          :index_cache_size_bytes,
+          :metadata_cache_size_bytes
+        ])
+
       interval = Keyword.get(opts, :read_consistency_interval_ms)
 
       if !(is_nil(interval) or
@@ -35,10 +48,14 @@ defmodule LanceDB.Connection do
       storage_options =
         LanceDB.StorageOptions.normalize!(storage_options)
 
-      Backend.connect(uri, storage_options, %{
-        read_consistency_interval_ms: interval,
-        timeout_ms: Options.timeout_ms!(opts[:timeout_ms])
-      })
+      options =
+        Map.new(opts, fn
+          {:read_consistency_interval_ms, _value} -> {:read_consistency_interval_ms, interval}
+          {:timeout_ms, value} -> {:timeout_ms, Options.timeout_ms!(value)}
+          {key, value} -> {key, cache_size!(value)}
+        end)
+
+      Backend.connect(uri, storage_options, options)
     end)
   end
 

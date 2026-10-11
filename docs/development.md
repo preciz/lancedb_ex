@@ -68,6 +68,9 @@ responses in a local read-only S3 fixture. Pending cursor reads, cleanup,
 and native job waits use Tokio and reply by message. BEAM schedulers stay
 available for other work. History and branch scheduler tests use one dirty CPU
 scheduler and verify that held metadata I/O does not delay Arrow conversion.
+Connect/open scheduler tests hold both S3 reads and local SDK region-resolution
+requests. They check deadlines and caller death with one dirty CPU and one
+dirty I/O scheduler, including admission release before storage is released.
 Source-build regressions use tiny Cargo workspaces
 and run only with `LANCEDB_BUILD=true`. Properties that change data create a fresh
 database **inside** `check all` with `with_database/1`.
@@ -136,3 +139,52 @@ LANCEDB_BUILD=true mix test test/lancedb_s3_test.exs --include s3
 Each test creates and removes tables under a unique prefix beneath the
 supplied URI. These tests check S3 compatibility with MinIO. They do not
 cover AWS IAM, STS, or AWS-specific service behavior.
+
+## Connection and open benchmark
+
+The benchmark compares per-open cache budgets with configuring those budgets
+on the initial connection. It reports connect and open separately, plus the
+combined per-sample time, as JSON with median and p95 values in microseconds.
+Run local storage alone, or reuse the disposable MinIO server for both:
+
+```sh
+MIX_ENV=test LANCEDB_BUILD=true mix run benchmarks/connection_open.exs
+MIX_ENV=test LANCEDB_BUILD=true scripts/test_s3.sh mix run benchmarks/connection_open.exs
+```
+
+Set `LANCEDB_BENCH_ITERATIONS` to change the default 100 samples per case.
+`--legacy-only` runs against a checkout before connection budgets were added.
+Five untimed opens prime SDK initialization and module loading. Cold cases
+create a fresh connection/session for each sample; they do not flush OS or
+storage caches. Warm cases retain a connection after one FTS index prewarm.
+The existing per-open budget path continues to create a new session on each
+open, whereas the configured connection reuses its session. The workload has
+100 rows, a text index, 112 MiB index and 16 MiB metadata budgets, and a zero
+read-consistency interval. Queries and index prewarming are outside the timed
+open samples. Setup time for each warm case is reported separately.
+
+On 2026-10-11, Linux x86_64 / Ryzen 7 8845HS, Rust 1.99.0 release builds,
+Elixir 1.20.4 / OTP 29, and localhost MinIO RELEASE.2025-09-07T16-13-09Z:
+
+| Cold case | Median connect (ms) | Median open (ms) | Median combined (ms) |
+| --- | ---: | ---: | ---: |
+| Local, before patch | 0.112 | 0.161 | 0.276 |
+| Local, existing path after patch | 0.106 | 0.155 | 0.263 |
+| Local, configured connection | 0.103 | 0.062 | 0.167 |
+| MinIO, before patch | 5.892 | 6.948 | 12.852 |
+| MinIO, existing path after patch | 5.839 | 6.881 | 12.770 |
+| MinIO, configured connection | 5.609 | 0.951 | 6.656 |
+
+| Warm case | Before patch median open (ms) | Existing path median/p95 (ms) | Configured median/p95 (ms) |
+| --- | ---: | ---: | ---: |
+| Local | 0.169 | 0.166 / 0.238 | 0.021 / 0.030 |
+| MinIO | 6.839 | 7.711 / 24.405 | 0.295 / 0.353 |
+
+Combined medians are computed per sample, so they need not equal the sum of
+the phase medians. The paired comparison shows about 48% lower cold combined
+time and 96% lower warm open time on MinIO. This sequential microbenchmark
+does not predict production S3 latency or FTS query performance; host load,
+SDK cache reuse, and namespace setup affect its results. The before-patch
+baseline was captured on commit `1f45a1f`; the comparison runs both paths in
+the patched build. Recorded phase summaries are in
+[`benchmarks/results/connection_open_2026-10-11.json`](https://github.com/preciz/lancedb_ex/blob/main/benchmarks/results/connection_open_2026-10-11.json).

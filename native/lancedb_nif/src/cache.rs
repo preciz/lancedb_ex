@@ -1,6 +1,23 @@
 use crate::error::Failure;
 use crate::resources::{TableResource, RUNTIME};
+use lance::{dataset::ReadParams, session::Session};
 use rustler::ResourceArc;
+use std::sync::Arc;
+
+pub(crate) fn session(
+    index_size_bytes: Option<usize>,
+    metadata_size_bytes: Option<usize>,
+) -> Option<Arc<Session>> {
+    if index_size_bytes.is_none() && metadata_size_bytes.is_none() {
+        return None;
+    }
+    let defaults = ReadParams::default();
+    Some(Arc::new(Session::new(
+        index_size_bytes.unwrap_or(defaults.index_cache_size_bytes),
+        metadata_size_bytes.unwrap_or(defaults.metadata_cache_size_bytes),
+        Default::default(),
+    )))
+}
 
 #[rustler::nif(schedule = "DirtyIo")]
 fn cache_stats(table: ResourceArc<TableResource>) -> Result<String, Failure> {

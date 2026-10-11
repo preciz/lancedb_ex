@@ -794,4 +794,55 @@ defmodule LanceDB.S3Test do
     assert {:ok, ["copy"]} = LanceDB.Connection.table_names(conn, limit: 1)
     assert {:ok, ["source"]} = LanceDB.Connection.table_names(conn, start_after: "copy")
   end
+
+  test "initial cache sessions preserve S3 storage overrides and consistency", %{
+    conn: writer,
+    uri: uri,
+    options: options
+  } do
+    alias LanceDB.{Connection, Table}
+    {:ok, table} = Connection.create_table(writer, "docs", [%{id: 1}])
+    {:ok, location} = Table.uri(table)
+    bad_options = Map.put(options, "aws_endpoint", "http://127.0.0.1:1")
+
+    local =
+      Path.join(
+        LanceDB.TestSupport.tmp_dir(),
+        "s3_initial_cache_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf!(local) end)
+
+    budgets = [
+      index_cache_size_bytes: 0,
+      metadata_cache_size_bytes: 0,
+      read_consistency_interval_ms: 0
+    ]
+
+    readers =
+      for {uri, storage} <- [{uri, options}, {local, bad_options}] do
+        {:ok, conn} = LanceDB.connect(uri, storage, budgets)
+
+        assert {:ok, reader} =
+                 Connection.open_table(conn, "alias",
+                   location: location,
+                   storage_options: %{aws_endpoint: options["aws_endpoint"]}
+                 )
+
+        assert {:ok, [%{"id" => 1}]} = LanceDB.Query.query(reader)
+        reader
+      end
+
+    assert {:ok, %{inserted: 1}} = Table.add(table, [%{id: 2}])
+
+    for reader <- readers do
+      assert {:ok, [%{"id" => 1}, %{"id" => 2}]} = LanceDB.Query.query(reader)
+      assert {:ok, stats} = Table.cache_stats(reader)
+
+      for cache <- ["index", "metadata"] do
+        assert stats[cache]["size_bytes"] == 0
+        assert stats[cache]["num_entries"] == 0
+      end
+    end
+  end
 end

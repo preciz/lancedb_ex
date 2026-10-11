@@ -97,4 +97,9 @@ curl --fail-with-body --silent --show-error --max-time 10 \
   --header "Host: 127.0.0.1" \
   --request PUT "$LANCEDB_TEST_S3_ENDPOINT/lancedb-ci"
 
-mix test test/lancedb_s3_test.exs --include s3 --warnings-as-errors
+# An explicit command can reuse the verified, disposable server for benchmarks.
+if [[ "$#" -gt 0 ]]; then
+  "$@"
+else
+  mix test test/lancedb_s3_test.exs --include s3 --warnings-as-errors
+fi

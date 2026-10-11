@@ -11,6 +11,8 @@ use std::collections::HashMap;
 struct ConnectOptions {
     read_consistency_interval_ms: Option<u32>,
     timeout_ms: Option<u32>,
+    index_cache_size_bytes: Option<usize>,
+    metadata_cache_size_bytes: Option<usize>,
 }
 
 #[rustler::nif]
@@ -29,7 +31,11 @@ fn connect(
     crate::read_task::spawn(env, reference, deadline, async move {
         let config =
             ConnectionConfig::new(uri, storage_options, options.read_consistency_interval_ms);
-        let conn = config.connect(None).await.map_err(|e| {
+        let session = crate::cache::session(
+            options.index_cache_size_bytes,
+            options.metadata_cache_size_bytes,
+        );
+        let conn = config.connect(session).await.map_err(|e| {
             let message = format!("Failed to connect: {e}");
             Failure::from_error(e).context(message)
         })?;

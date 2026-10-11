@@ -96,6 +96,29 @@ defmodule LanceDB.OpenTest do
     end
   end
 
+  test "connection cache sessions preserve read consistency", %{path: path, table: writer} do
+    {:ok, conn} =
+      LanceDB.connect(path, %{},
+        index_cache_size_bytes: 0,
+        metadata_cache_size_bytes: 0,
+        read_consistency_interval_ms: 0
+      )
+
+    {:ok, reader} = LanceDB.Connection.open_table(conn, "docs")
+    assert {:ok, [%{"id" => 1}]} = LanceDB.Query.query(reader)
+    assert {:ok, %{updated: 1}} = LanceDB.Table.update(writer, %{id: 2})
+    assert {:ok, [%{"id" => 2}]} = LanceDB.Query.query(reader)
+  end
+
+  test "invalid initial cache budgets fail before native execution" do
+    for key <- [:index_cache_size_bytes, :metadata_cache_size_bytes],
+        value <- [-1, 1.5, nil, true, 9_223_372_036_854_775_808] do
+      assert_raise ArgumentError, ~r/cache sizes/, fn ->
+        LanceDB.connect("unused", %{}, [{key, value}])
+      end
+    end
+  end
+
   test "invalid open and listing options fail before native calls" do
     for opts <- [
           [branch: ""],
