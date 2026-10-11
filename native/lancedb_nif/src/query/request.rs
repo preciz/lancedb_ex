@@ -59,6 +59,6 @@ pub(super) enum QueryKind {
         limit: usize,
         filter: Option<String>,
         distance_type: Option<String>,
-        controls: SearchControls,
+        controls: Box<SearchControls>,
     },
 }

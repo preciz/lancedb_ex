@@ -112,7 +112,7 @@ fn utc_type(data_type: &DataType) -> DataType {
         )
     };
     match data_type {
-        DataType::Timestamp(unit, Some(_)) => DataType::Timestamp(unit.clone(), Some("UTC".into())),
+        DataType::Timestamp(unit, Some(_)) => DataType::Timestamp(*unit, Some("UTC".into())),
         DataType::List(item) => DataType::List(child(item)),
         DataType::LargeList(item) => DataType::LargeList(child(item)),
         DataType::FixedSizeList(item, size) => DataType::FixedSizeList(child(item), *size),

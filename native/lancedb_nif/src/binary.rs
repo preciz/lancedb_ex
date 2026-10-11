@@ -9,7 +9,9 @@ pub(crate) fn decode(hex: &str) -> Result<Vec<u8>, Failure> {
         return Err("Invalid binary hex encoding".into());
     }
     hex.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             let high = (pair[0] as char).to_digit(16);
             let low = (pair[1] as char).to_digit(16);

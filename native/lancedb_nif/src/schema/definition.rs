@@ -252,123 +252,6 @@ fn arrow_fields(fields: Vec<FieldDefinition>) -> Result<Vec<Field>, Failure> {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use arrow_schema::TimeUnit;
-    use serde_json::json;
-
-    fn assert_type(definition: serde_json::Value, expected: DataType) {
-        let data_type: TypeDefinition = serde_json::from_value(definition.clone()).unwrap();
-        assert_eq!(data_type.into_arrow().unwrap(), expected);
-        let mut field = definition;
-        field["name"] = "column".into();
-        field["nullable"] = false.into();
-        field["metadata"] = json!({"label": "雪"});
-        let schema = explicit_schema(&json!([field]).to_string()).unwrap();
-        assert_eq!(schema.field(0).data_type(), &expected);
-        assert!(!schema.field(0).is_nullable());
-        assert_eq!(schema.field(0).metadata()["label"], "雪");
-        let encoded = serde_json::to_string(&FieldDefinition::from(schema.field(0))).unwrap();
-        let decoded: FieldDefinition = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(decoded.into_arrow().unwrap(), *schema.field(0));
-    }
-
-    #[test]
-    fn creation_and_standalone_types_preserve_all_primitives_and_timestamp_units() {
-        for (name, expected) in [
-            ("string", DataType::Utf8),
-            ("binary", DataType::Binary),
-            ("boolean", DataType::Boolean),
-            ("int8", DataType::Int8),
-            ("int16", DataType::Int16),
-            ("int32", DataType::Int32),
-            ("int64", DataType::Int64),
-            ("uint8", DataType::UInt8),
-            ("uint16", DataType::UInt16),
-            ("uint32", DataType::UInt32),
-            ("uint64", DataType::UInt64),
-            ("float16", DataType::Float16),
-            ("float32", DataType::Float32),
-            ("float64", DataType::Float64),
-            ("date32", DataType::Date32),
-            ("date64", DataType::Date64),
-        ] {
-            assert_type(json!({"type": name}), expected);
-        }
-        for (name, unit) in [
-            ("second", TimeUnit::Second),
-            ("millisecond", TimeUnit::Millisecond),
-            ("microsecond", TimeUnit::Microsecond),
-            ("nanosecond", TimeUnit::Nanosecond),
-        ] {
-            for timezone in [None, Some("UTC"), Some("Europe/Vienna"), Some("+02:00")] {
-                assert_type(
-                    json!({"type": "timestamp", "unit": name, "timezone": timezone}),
-                    DataType::Timestamp(unit.clone(), timezone.map(Into::into)),
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn recursive_types_preserve_child_names_nullability_metadata_and_vector_dimensions() {
-        let definition = json!({"type": "list", "item": {
-            "name": "item", "nullable": false, "metadata": {"element": "document"},
-            "type": "struct", "fields": [
-                {"name": "a.b", "nullable": true, "type": "vector", "dimension": 3,
-                    "metadata": {"model": "embedding"}},
-                {"name": "at", "nullable": false, "type": "timestamp", "unit": "microsecond"}
-            ]
-        }});
-        let vector = Field::new(
-            "a.b",
-            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
-            true,
-        )
-        .with_metadata(HashMap::from([("model".into(), "embedding".into())]));
-        let at = Field::new(
-            "at",
-            DataType::Timestamp(TimeUnit::Microsecond, None),
-            false,
-        );
-        let item = Field::new("item", DataType::Struct(vec![vector, at].into()), false)
-            .with_metadata(HashMap::from([("element".into(), "document".into())]));
-        assert_type(definition, DataType::List(Arc::new(item)));
-    }
-
-    #[test]
-    fn invalid_types_are_rejected_by_creation_and_standalone_conversion() {
-        for definition in [
-            json!({"type": "unknown"}),
-            json!({"type": "list"}),
-            json!({"type": "struct"}),
-            json!({"type": "struct", "fields": []}),
-            json!({"type": "struct", "fields": [
-                {"name": "same", "type": "string", "nullable": true},
-                {"name": "same", "type": "int64", "nullable": true}
-            ]}),
-            json!({"type": "struct", "fields": [{"name": " ", "type": "int64", "nullable": true}]}),
-            json!({"type": "vector"}),
-            json!({"type": "vector", "dimension": 0}),
-            json!({"type": "vector", "dimension": -1}),
-            json!({"type": "timestamp"}),
-            json!({"type": "timestamp", "unit": "bad"}),
-            json!({"type": "timestamp", "unit": "second", "timezone": "invalid/timezone"}),
-        ] {
-            let data_type: TypeDefinition = serde_json::from_value(definition.clone()).unwrap();
-            let error = data_type.into_arrow().unwrap_err();
-            let mut field = definition;
-            field["name"] = "column".into();
-            field["nullable"] = true.into();
-            assert_eq!(
-                explicit_schema(&json!([field]).to_string()).unwrap_err(),
-                error
-            );
-        }
-    }
-}
-
 impl From<&Field> for FieldDefinition {
     fn from(field: &Field) -> Self {
         let is_blob = crate::blob::schema::is_input(field);
@@ -466,6 +349,123 @@ impl From<&DataType> for TypeDefinition {
             other => Self::Unsupported {
                 arrow_type: format!("{other:?}"),
             },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_schema::TimeUnit;
+    use serde_json::json;
+
+    fn assert_type(definition: serde_json::Value, expected: DataType) {
+        let data_type: TypeDefinition = serde_json::from_value(definition.clone()).unwrap();
+        assert_eq!(data_type.into_arrow().unwrap(), expected);
+        let mut field = definition;
+        field["name"] = "column".into();
+        field["nullable"] = false.into();
+        field["metadata"] = json!({"label": "雪"});
+        let schema = explicit_schema(&json!([field]).to_string()).unwrap();
+        assert_eq!(schema.field(0).data_type(), &expected);
+        assert!(!schema.field(0).is_nullable());
+        assert_eq!(schema.field(0).metadata()["label"], "雪");
+        let encoded = serde_json::to_string(&FieldDefinition::from(schema.field(0))).unwrap();
+        let decoded: FieldDefinition = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.into_arrow().unwrap(), *schema.field(0));
+    }
+
+    #[test]
+    fn creation_and_standalone_types_preserve_all_primitives_and_timestamp_units() {
+        for (name, expected) in [
+            ("string", DataType::Utf8),
+            ("binary", DataType::Binary),
+            ("boolean", DataType::Boolean),
+            ("int8", DataType::Int8),
+            ("int16", DataType::Int16),
+            ("int32", DataType::Int32),
+            ("int64", DataType::Int64),
+            ("uint8", DataType::UInt8),
+            ("uint16", DataType::UInt16),
+            ("uint32", DataType::UInt32),
+            ("uint64", DataType::UInt64),
+            ("float16", DataType::Float16),
+            ("float32", DataType::Float32),
+            ("float64", DataType::Float64),
+            ("date32", DataType::Date32),
+            ("date64", DataType::Date64),
+        ] {
+            assert_type(json!({"type": name}), expected);
+        }
+        for (name, unit) in [
+            ("second", TimeUnit::Second),
+            ("millisecond", TimeUnit::Millisecond),
+            ("microsecond", TimeUnit::Microsecond),
+            ("nanosecond", TimeUnit::Nanosecond),
+        ] {
+            for timezone in [None, Some("UTC"), Some("Europe/Vienna"), Some("+02:00")] {
+                assert_type(
+                    json!({"type": "timestamp", "unit": name, "timezone": timezone}),
+                    DataType::Timestamp(unit, timezone.map(Into::into)),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn recursive_types_preserve_child_names_nullability_metadata_and_vector_dimensions() {
+        let definition = json!({"type": "list", "item": {
+            "name": "item", "nullable": false, "metadata": {"element": "document"},
+            "type": "struct", "fields": [
+                {"name": "a.b", "nullable": true, "type": "vector", "dimension": 3,
+                    "metadata": {"model": "embedding"}},
+                {"name": "at", "nullable": false, "type": "timestamp", "unit": "microsecond"}
+            ]
+        }});
+        let vector = Field::new(
+            "a.b",
+            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
+            true,
+        )
+        .with_metadata(HashMap::from([("model".into(), "embedding".into())]));
+        let at = Field::new(
+            "at",
+            DataType::Timestamp(TimeUnit::Microsecond, None),
+            false,
+        );
+        let item = Field::new("item", DataType::Struct(vec![vector, at].into()), false)
+            .with_metadata(HashMap::from([("element".into(), "document".into())]));
+        assert_type(definition, DataType::List(Arc::new(item)));
+    }
+
+    #[test]
+    fn invalid_types_are_rejected_by_creation_and_standalone_conversion() {
+        for definition in [
+            json!({"type": "unknown"}),
+            json!({"type": "list"}),
+            json!({"type": "struct"}),
+            json!({"type": "struct", "fields": []}),
+            json!({"type": "struct", "fields": [
+                {"name": "same", "type": "string", "nullable": true},
+                {"name": "same", "type": "int64", "nullable": true}
+            ]}),
+            json!({"type": "struct", "fields": [{"name": " ", "type": "int64", "nullable": true}]}),
+            json!({"type": "vector"}),
+            json!({"type": "vector", "dimension": 0}),
+            json!({"type": "vector", "dimension": -1}),
+            json!({"type": "timestamp"}),
+            json!({"type": "timestamp", "unit": "bad"}),
+            json!({"type": "timestamp", "unit": "second", "timezone": "invalid/timezone"}),
+        ] {
+            let data_type: TypeDefinition = serde_json::from_value(definition.clone()).unwrap();
+            let error = data_type.into_arrow().unwrap_err();
+            let mut field = definition;
+            field["name"] = "column".into();
+            field["nullable"] = true.into();
+            assert_eq!(
+                explicit_schema(&json!([field]).to_string()).unwrap_err(),
+                error
+            );
         }
     }
 }

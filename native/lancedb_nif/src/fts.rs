@@ -239,11 +239,9 @@ fn tokenize_table(
             match selector.as_str() {
                 "index" => table.table.tokenize(&text, &name).await,
                 "column" => table.table.tokenize_with_column(&text, &name).await,
-                _ => {
-                    return Err(lancedb::Error::InvalidInput {
-                        message: "Invalid tokenizer selector".into(),
-                    })
-                }
+                _ => Err(lancedb::Error::InvalidInput {
+                    message: "Invalid tokenizer selector".into(),
+                }),
             }
         })
         .await?;

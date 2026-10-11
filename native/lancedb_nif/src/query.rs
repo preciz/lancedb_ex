@@ -20,7 +20,7 @@ pub(crate) enum PreparedQuery {
     Plain(Query, OutputProjection),
     Vector(VectorQuery, OutputProjection),
     Take(TakeQuery, OutputProjection),
-    Hybrid(HybridPlan),
+    Hybrid(Box<HybridPlan>),
 }
 
 impl PreparedQuery {

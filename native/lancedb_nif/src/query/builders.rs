@@ -39,7 +39,7 @@ impl QueryRequest {
                     limit,
                     filter,
                     distance_type,
-                    controls,
+                    *controls,
                 )
                 .await
             }
@@ -206,7 +206,7 @@ async fn prepare_vector(
             read,
         )
         .await?;
-        Ok(PreparedQuery::Hybrid(HybridPlan {
+        Ok(PreparedQuery::Hybrid(Box::new(HybridPlan {
             vector,
             text,
             result: HybridResultPlan {
@@ -216,7 +216,7 @@ async fn prepare_vector(
                 projection: projection.output,
                 order_by: options.order_by,
             },
-        }))
+        })))
     } else {
         query = crate::ranking::apply(query, &options.order_by);
         Ok(PreparedQuery::Vector(query, projection.output))

@@ -129,7 +129,7 @@ pub(crate) struct Permit(&'static AtomicUsize);
 impl Permit {
     fn acquire(active: &'static AtomicUsize, limit: &AtomicUsize) -> Result<Self, Failure> {
         active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 (count < limit.load(Ordering::Acquire)).then_some(count + 1)
             })
             .map_err(|_| Failure::new("busy", "Native operation concurrency limit reached"))?;

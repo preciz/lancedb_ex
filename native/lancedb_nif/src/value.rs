@@ -240,6 +240,13 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+pub(crate) fn vector_element_type(data_type: &DataType) -> bool {
+    matches!(
+        data_type,
+        DataType::Float16 | DataType::Float32 | DataType::Float64 | DataType::UInt8
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,11 +297,4 @@ mod tests {
         assert!(normalize(&mut json!("1969-12-31T23:59:59.999001Z"), &field).is_err());
         assert!(normalize(&mut json!("1969-12-31T23:59:59.999"), &field).is_err());
     }
-}
-
-pub(crate) fn vector_element_type(data_type: &DataType) -> bool {
-    matches!(
-        data_type,
-        DataType::Float16 | DataType::Float32 | DataType::Float64 | DataType::UInt8
-    )
 }
