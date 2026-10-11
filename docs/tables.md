@@ -184,14 +184,36 @@ the selected branch. The default branch is main.
 Opening a snapshot does not change other handles.
 
 Storage options override the connection's options for the opened table.
-Either cache limit creates a dedicated native session for that handle and
-its derived branch handles. This session keeps connection storage and
+Either cache limit creates a dedicated native session for that handle.
+Snapshots and branch checkouts preserve it; branch creation uses a new SDK
+session. The dedicated session keeps connection storage and
 read-consistency settings. The other cache keeps its SDK default. Zero
 disables the selected cache. These budgets do not limit total query memory.
 
 If you do not set either limit, opened tables use the shared connection
 session. These options do not represent arbitrary Rust read callbacks,
 credential providers, or namespace clients.
+
+`LanceDB.Table.cache_stats/1` inspects the handle's actual native session
+without installing the process-global metrics recorder:
+
+```elixir
+{:ok, %{"scope" => "session", "index" => index, "metadata" => metadata}} =
+  LanceDB.Table.cache_stats(table)
+index["size_bytes"]
+metadata["num_entries"]
+```
+
+Each cache reports `size_bytes` (SDK-accounted entry bytes), `num_entries`,
+and cumulative `hits` and `misses`. `capacity_bytes` is `nil`: the pinned SDK
+does not expose capacity. These figures describe cache entries, not total
+native memory or process RSS. Counters are not reset by inspection; concurrent
+work can change individual fields while the snapshot is read. Shared handles
+report session-wide statistics; explicit per-open cache budgets isolate them.
+Snapshots and branch checkouts share their source session; creating a branch
+uses a new SDK session. Resolving the
+session follows read consistency and may check storage. The result contains
+no URI, credentials, or storage options.
 
 ## Table maintenance
 

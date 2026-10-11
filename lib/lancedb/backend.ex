@@ -57,6 +57,7 @@ defmodule LanceDB.Backend do
 
   def list_indices(table), do: call(:list_indices, [table])
   def table_stats(table), do: call(:table_stats, [table])
+  def cache_stats(table), do: call(:cache_stats, [table])
   def index_stats(table, name), do: call(:index_stats, [table, name])
   def index_readiness(table, names, timeout), do: call(:index_readiness, [table, names, timeout])
   def drop_index(table, name), do: call(:drop_index, [table, name])

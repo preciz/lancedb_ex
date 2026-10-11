@@ -134,6 +134,7 @@ defmodule LanceDB.Native do
   def create_index(_table, _column, _options), do: :erlang.nif_error(:nif_not_loaded)
   def list_indices(_table), do: :erlang.nif_error(:nif_not_loaded)
   def table_stats(_table), do: :erlang.nif_error(:nif_not_loaded)
+  def cache_stats(_table), do: :erlang.nif_error(:nif_not_loaded)
   def index_stats(_table, _name), do: :erlang.nif_error(:nif_not_loaded)
   def index_readiness(_table, _names, _timeout), do: :erlang.nif_error(:nif_not_loaded)
   def drop_index(_table, _name), do: :erlang.nif_error(:nif_not_loaded)

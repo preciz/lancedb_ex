@@ -14,6 +14,31 @@ defmodule LanceDB.Table do
   alias LanceDB.Write
 
   @doc """
+  Returns native cache statistics as a map with string keys, without enabling
+  the process-global metrics recorder.
+
+  `"scope"` is `"session"`. The `"index"` and `"metadata"` maps contain
+  `"size_bytes"` (SDK-accounted entry bytes), `"num_entries"`, and cumulative
+  `"hits"` and `"misses"`. `"capacity_bytes"` is nil because the pinned SDK
+  does not expose configured capacity. Usage is not total native memory or RSS.
+
+  Statistics cover the actual session used by the handle, including other
+  handles sharing it. Explicit table-open cache budgets create an isolated
+  session. Snapshots and branch checkouts preserve their source session; branch
+  creation uses a new SDK session. Reads do not reset counters. Concurrent
+  activity can change fields during a snapshot.
+
+  Resolving the session follows the handle's read-consistency configuration
+  and may check storage. No table URI or storage options are returned.
+  """
+  @spec cache_stats(table()) :: result(map())
+  def cache_stats(table) do
+    LanceDB.Execution.run(:cache_stats, fn ->
+      table |> Backend.cache_stats() |> LanceDB.Result.decode()
+    end)
+  end
+
+  @doc """
   Writes a row list or Source using the stored table schema. One commit is the default; commit: :batch explicitly enables incremental insertion. Empty append is a no-op; empty overwrite clears rows.
 
   Returns `{:ok, %LanceDB.WriteResult{inserted: count, version: commit_version}}`.

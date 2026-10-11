@@ -11,6 +11,7 @@ mod binary;
 mod blob;
 mod branch;
 mod bulk;
+mod cache;
 mod cloning;
 mod codec;
 mod compat;
