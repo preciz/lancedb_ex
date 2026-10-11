@@ -17,7 +17,7 @@ defmodule LanceDB.MixProject do
       docs: [
         main: "readme",
         extras:
-          ["README.md"] ++
+          ["README.md", "CHANGELOG.md"] ++
             Enum.map(Path.wildcard("docs/*.md"), fn
               "docs/search.md" -> {"docs/search.md", filename: "search-guide"}
               path -> path
@@ -50,7 +50,7 @@ defmodule LanceDB.MixProject do
         licenses: ["MIT"],
         links: %{"GitHub" => @source_url},
         files:
-          ~w(lib docs native Cargo.toml Cargo.lock rust-toolchain.toml mix.exs README.md LICENSE .formatter.exs native-build.exs checksum-*.exs)
+          ~w(lib docs native Cargo.toml Cargo.lock rust-toolchain.toml mix.exs README.md CHANGELOG.md LICENSE .formatter.exs native-build.exs checksum-*.exs)
       ]
     ]
   end
