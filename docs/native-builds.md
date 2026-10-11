@@ -134,7 +134,7 @@ not substitute for the two-target workflow or its trusted combined
 manifest. The local packager refuses to replace an existing archive or
 checksum file. Build distributed binaries on their intended minimum OS version.
 
-## First public package release
+## Preparing a package release
 
 Use the public repository `preciz/lancedb_ex`. First publish and verify the
 two Linux native archives. Commit their matching build and checksum manifests.
@@ -188,15 +188,17 @@ Review `CHANGELOG.md` and the generated documentation too.
 After all checks pass, tag the package source and publish to Hex:
 
 ```sh
-git tag -a v0.1.0 -m "Release v0.1.0"
-git push origin main v0.1.0
+git tag -a v0.1.1 -m "Release v0.1.1"
+git push origin main v0.1.1
 env -u LANCEDB_BUILD mix hex.publish
 ```
 
-Require a clean working tree before tagging. If `v0.1.0` already exists,
-check its local and remote revisions. It must identify the final package
-commit, including the selected native manifests. Resolve an older tag before
-publication; do not publish from a different commit under the same tag.
+Require a clean working tree before tagging. The version tag must identify
+the final package commit, including the selected native manifests. If that
+tag already exists, check its local and remote revisions before continuing.
+Never move a tag for a published Hex version or publish a different commit
+under the same version. Use a new package version for changes to a published
+release.
 
 The package tag identifies the Elixir release. The separate native tag
 identifies the compiled wrapper. Building and publishing a native archive
@@ -205,7 +207,7 @@ does not require a Hex release or an Elixir package version change.
 A published Hex version contains its selected build and trusted checksums.
 To change the default for Hex users, publish a new package version with the
 new matching manifests. Git checkouts can select a new native build while
-the Elixir package version remains `0.1.0`.
+the Elixir package version remains unchanged.
 
 Clear `LANCEDB_BUILD` when you build or publish the Hex package. This keeps
 Rustler optional in the published dependency metadata. Source tests and
