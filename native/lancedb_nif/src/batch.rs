@@ -45,15 +45,11 @@ fn batch_to_ipc<'a>(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn batch_from_ipc(bytes: rustler::Binary<'_>) -> Result<Vec<ResourceArc<BatchResource>>, Failure> {
-    let reader = arrow::ipc::reader::StreamReader::try_new(bytes.as_slice(), None)
-        .map_err(Failure::from_error)?;
-    reader
-        .map(|batch| {
-            batch
-                .map(|batch| ResourceArc::new(BatchResource { batch }))
-                .map_err(Failure::from_error)
-        })
-        .collect()
+    let batches = crate::compat::ipc::read_stream(bytes.as_slice())?;
+    Ok(batches
+        .into_iter()
+        .map(|batch| ResourceArc::new(BatchResource { batch }))
+        .collect())
 }
 
 // Decode owned values before the shared schema validation and Arrow conversion.

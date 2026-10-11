@@ -1,6 +1,7 @@
 //! SDK adapters for the pinned versions.
 //! See the SDK compatibility section in README.md for removal criteria.
 pub(crate) mod fts;
+pub(crate) mod ipc;
 pub(crate) mod statistics;
 pub(crate) mod storage;
 pub(crate) use statistics::training_loss;
