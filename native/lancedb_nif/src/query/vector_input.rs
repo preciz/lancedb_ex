@@ -14,6 +14,16 @@ enum SearchMode {
     Multivector,
 }
 
+impl SearchMode {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Single => "single-vector",
+            Self::Batch => "batch",
+            Self::Multivector => "multivector",
+        }
+    }
+}
+
 #[derive(serde::Deserialize)]
 pub(super) struct VectorInput {
     vector: Vec<f64>,
@@ -74,10 +84,14 @@ impl VectorInput {
             let field = schema
                 .field(column)
                 .ok_or_else(|| format!("Unknown vector column: {column}"))?;
-            if !self.matches(&field.data_type()) {
-                return Err(
-                    "Vector column type or dimension does not match the search mode".into(),
-                );
+            let dimension = self.dimension(&field.data_type()).ok_or_else(|| {
+                format!(
+                    "Vector column '{column}' has a type incompatible with {} search",
+                    self.search_mode.name()
+                )
+            })?;
+            if dimension != self.vector.len() {
+                return Err(self.dimension_error(&[(column.into(), dimension)]));
             }
             return Ok(column.into());
         }
@@ -85,19 +99,53 @@ impl VectorInput {
         for field in schema.fields() {
             self.collect(field, &mut Vec::new(), &mut candidates);
         }
-        if candidates.len() != 1 {
-            return Err(
-                "Expected exactly one matching vector column; specify vector_column".into(),
-            );
+        let matching: Vec<_> = candidates
+            .iter()
+            .filter(|(_, dimension)| *dimension == self.vector.len())
+            .collect();
+        match matching.as_slice() {
+            [(column, _)] => Ok(column.clone()),
+            [] if candidates.is_empty() => Err(format!(
+                "No vector column has a type compatible with {} search",
+                self.search_mode.name()
+            )
+            .into()),
+            [] => Err(self.dimension_error(&candidates)),
+            _ => Err("Expected exactly one matching vector column; specify vector_column".into()),
         }
-        Ok(candidates.remove(0))
     }
 
-    fn collect(&self, field: &Field, path: &mut Vec<String>, candidates: &mut Vec<String>) {
+    fn dimension_error(&self, candidates: &[(String, usize)]) -> Failure {
+        if let [(column, dimension)] = candidates {
+            return format!(
+                "Vector column '{column}' expects dimension {dimension}; query has dimension {}",
+                self.vector.len()
+            )
+            .into();
+        }
+        let dimensions = candidates
+            .iter()
+            .map(|(column, dimension)| format!("'{column}': {dimension}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Query vector dimension {} does not match any compatible vector column ({dimensions})",
+            self.vector.len()
+        )
+        .into()
+    }
+
+    fn collect(
+        &self,
+        field: &Field,
+        path: &mut Vec<String>,
+        candidates: &mut Vec<(String, usize)>,
+    ) {
         path.push(field.name().clone());
-        if self.matches(field.data_type()) {
-            candidates.push(format_field_path(
-                &path.iter().map(String::as_str).collect::<Vec<_>>(),
+        if let Some(dimension) = self.dimension(field.data_type()) {
+            candidates.push((
+                format_field_path(&path.iter().map(String::as_str).collect::<Vec<_>>()),
+                dimension,
             ));
         } else if let DataType::Struct(fields) = field.data_type() {
             for child in fields {
@@ -107,16 +155,22 @@ impl VectorInput {
         path.pop();
     }
 
-    fn matches(&self, data_type: &DataType) -> bool {
+    fn dimension(&self, data_type: &DataType) -> Option<usize> {
         let vector = match (data_type, &self.search_mode) {
             (DataType::List(item), SearchMode::Multivector) => item.data_type(),
             (_, SearchMode::Batch | SearchMode::Single) => data_type,
-            _ => return false,
+            _ => return None,
         };
-        matches!(vector, DataType::FixedSizeList(item, dimension)
-            if crate::value::vector_element_type(item.data_type())
-                && (self.search_mode != SearchMode::Multivector || item.data_type() == &DataType::Float32)
-                && *dimension as usize == self.vector.len())
+        match vector {
+            DataType::FixedSizeList(item, dimension)
+                if crate::value::vector_element_type(item.data_type())
+                    && (self.search_mode != SearchMode::Multivector
+                        || item.data_type() == &DataType::Float32) =>
+            {
+                Some(*dimension as usize)
+            }
+            _ => None,
+        }
     }
 }
 

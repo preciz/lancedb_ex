@@ -354,9 +354,10 @@ Choose the vector column and the fields returned by `search/3`:
   )
 ```
 
-`:vector_column` accepts a string or atom. Set it when the table has
-multiple vector columns. If you do not set this option, the SDK selects a
-column. Query dimensions must match the selected column. `:columns` accepts
+`:vector_column` accepts a string or atom. If you do not set this option,
+the package selects the unique column compatible with the search mode and
+query dimension. Set it when multiple columns match. Dimension errors report
+the query dimension and the expected column dimensions. `:columns` accepts
 a non-empty list of distinct string or atom field names. To return all
 fields, do not set this option, or set it to `nil`.
 
