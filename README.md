@@ -8,6 +8,8 @@ necessary. Supply your own vector embeddings.
 
 The Elixir package version is `0.1.0`. The Rust software development kit
 (SDK) version is pinned to `0.37.1`. Each native build has a separate immutable ID.
+The selected [native build](docs/installation.md#current-native-build) passed
+public download and production release checks on both supported Linux targets.
 
 ## Requirements
 
