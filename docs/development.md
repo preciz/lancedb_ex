@@ -6,6 +6,7 @@ Run all commands from the package directory.
 
 ## Development
 
+Use rustup so `rust-toolchain.toml` selects Rust 1.99.0 and rustfmt.
 Run these checks from the package directory. Set the source-build flag
 before you get dependencies:
 

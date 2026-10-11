@@ -7,9 +7,11 @@ Run all commands from the package directory.
 ## Explicit maintainer source builds
 
 To build from source, set `LANCEDB_BUILD=true` before you get dependencies.
-Mix then includes the Rustler compiler. Install Rust 1.94.1 or later, Cargo,
-a C/C++ build toolchain, and `protoc`. Rustler and RustlerPrecompiled are
-dependencies for compilation. An application release does not start them.
+Mix then includes the Rustler compiler. Install Rust through rustup,
+a C/C++ build toolchain, and `protoc`. `rust-toolchain.toml` pins Rust and Cargo
+to 1.99.0; CI and native artifact builds install the same version.
+Rustler and RustlerPrecompiled are dependencies for compilation. An application
+release does not start them.
 The first source build can take a long time and use much disk space.
 
 Use the committed Cargo lockfile and the SDK version `=0.37.1`.

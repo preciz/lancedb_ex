@@ -78,7 +78,7 @@ jobs:
         with:
           otp-version: '29'
           elixir-version: '1.20'
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: binary-source -> target

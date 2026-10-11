@@ -50,7 +50,7 @@ defmodule LanceDB.MixProject do
         licenses: ["MIT"],
         links: %{"GitHub" => @source_url},
         files:
-          ~w(lib docs native Cargo.toml Cargo.lock mix.exs README.md LICENSE .formatter.exs native-build.exs checksum-*.exs)
+          ~w(lib docs native Cargo.toml Cargo.lock rust-toolchain.toml mix.exs README.md LICENSE .formatter.exs native-build.exs checksum-*.exs)
       ]
     ]
   end
