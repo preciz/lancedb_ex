@@ -42,6 +42,13 @@ table clone shares its view. The shared Tokio runtime executes native
 operations. The package creates no process for each table and uses no
 connection pool.
 
+Connect and table open use a monitored one-shot Tokio task. Read admission
+happens before spawning; one deadline covers connection/session setup and the
+entire SDK operation. Reference-tagged replies preserve the synchronous Elixir
+API without retaining a BEAM scheduler. Timeout, caller death, and caught task
+panics drop the operation future and release its permit before replying. SDK
+tasks spawned separately can outlive that future.
+
 Read cancellation and write completion have different guarantees. Explicit
 cursor close waits for cleanup and read slot release. A writer abort sends
 an input error and waits for SDK execution. Dropping a write future can

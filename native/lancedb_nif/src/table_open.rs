@@ -1,8 +1,8 @@
 //! Isolate per-open sessions when cache sizes are explicitly configured.
 use crate::error::Failure;
-use crate::resources::{ConnectionResource, TableResource, RUNTIME};
+use crate::resources::{ConnectionResource, TableResource};
 use lance::{dataset::ReadParams, session::Session};
-use rustler::ResourceArc;
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,6 +15,7 @@ pub(crate) struct OpenOptions {
     storage_options: Option<HashMap<String, String>>,
     index_cache_size_bytes: Option<usize>,
     metadata_cache_size_bytes: Option<usize>,
+    timeout_ms: Option<u32>,
 }
 
 impl OpenOptions {
@@ -75,15 +76,20 @@ impl OpenOptions {
     }
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn open_table(
+    env: Env<'_>,
     conn: ResourceArc<ConnectionResource>,
     name: String,
     options: String,
-) -> Result<ResourceArc<TableResource>, Failure> {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
     let options: OpenOptions = serde_json::from_str(&options).map_err(Failure::from_error)?;
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+    let deadline = crate::execution::ExecutionOptions {
+        timeout_ms: options.timeout_ms,
+    }
+    .deadline_for("Table open");
+    crate::read_task::spawn(env, reference, deadline, async move {
         let table = options.open(&conn, &name).await?;
         Ok(ResourceArc::new(TableResource {
             table: Arc::new(table),
@@ -94,6 +100,7 @@ fn open_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::RUNTIME;
     use arrow_array::{Int64Array, RecordBatch};
 
     #[test]

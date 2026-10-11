@@ -42,8 +42,8 @@ defmodule LanceDB.Backend do
   def metrics_catalog, do: call(:metrics_catalog, [])
   def metrics_snapshot, do: call(:metrics_snapshot, [])
 
-  def connect(uri, storage_options, read_consistency_interval_ms),
-    do: call(:connect, [uri, storage_options, read_consistency_interval_ms])
+  def connect(uri, storage_options, options),
+    do: call(:connect, [uri, storage_options, JSON.encode!(options)])
 
   def table_names(conn, start_after, limit), do: call(:table_names, [conn, start_after, limit])
   def open_table(conn, name, options), do: call(:open_table, [conn, name, JSON.encode!(options)])

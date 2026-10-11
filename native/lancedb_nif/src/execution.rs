@@ -20,15 +20,21 @@ pub(crate) struct ExecutionOptions {
 pub(crate) struct Deadline {
     at: Option<Instant>,
     timeout_ms: Option<u32>,
+    operation: &'static str,
 }
 
 impl ExecutionOptions {
     pub(crate) fn deadline(self) -> Deadline {
+        self.deadline_for("Query")
+    }
+
+    pub(crate) fn deadline_for(self, operation: &'static str) -> Deadline {
         Deadline {
             at: self
                 .timeout_ms
                 .map(|ms| Instant::now() + Duration::from_millis(ms.into())),
             timeout_ms: self.timeout_ms,
+            operation,
         }
     }
 
@@ -52,7 +58,11 @@ impl Deadline {
     fn error(self) -> Failure {
         Failure::new(
             "timeout",
-            format!("Query timed out after {} ms", self.timeout_ms.unwrap()),
+            format!(
+                "{} timed out after {} ms",
+                self.operation,
+                self.timeout_ms.unwrap()
+            ),
         )
     }
 

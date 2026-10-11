@@ -159,6 +159,24 @@ does not expose deep cloning or branch diff and merge.
 
 ## Table-open controls and listing
 
+Both connection and table opens accept an optional `timeout_ms`:
+
+```elixir
+{:ok, conn} = LanceDB.connect(uri, storage_options, timeout_ms: 5_000)
+{:ok, table} = LanceDB.Connection.open_table(conn, "docs", timeout_ms: 2_000)
+```
+
+The value is a positive uint32 millisecond count; omitted or `nil` adds no
+wrapper deadline. A timeout returns `{:error, %LanceDB.Error{kind: :timeout}}`.
+The open budget covers the whole operation, including the extra SDK connection
+when per-open cache budgets select a dedicated session. These APIs wait for a
+result in the caller's mailbox while native work runs on Tokio. Storage waits
+retain no BEAM scheduler. Caller death cancels the operation and releases its
+read admission slot. Cancellation is cooperative: it cannot preempt synchronous
+SDK work or guarantee that separately spawned SDK storage tasks have stopped.
+A `GenServer.call` timeout only stops waiting; use `timeout_ms` to bound native
+work, or terminate the calling process to cancel it.
+
 Existing `open_table/2` calls keep their behavior. The optional third
 argument can select a branch or version. It can also override storage
 options or location and configure native cache budgets:

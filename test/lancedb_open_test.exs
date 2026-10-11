@@ -73,6 +73,29 @@ defmodule LanceDB.OpenTest do
     assert {:ok, []} = LanceDB.Connection.table_names(conn, start_after: "z")
   end
 
+  test "connect and open preserve results with optional native deadlines", %{path: path} do
+    for timeout <- [nil, 10_000, 4_294_967_295] do
+      assert {:ok, conn} = LanceDB.connect(path, %{}, timeout_ms: timeout)
+      assert {:ok, table} = LanceDB.Connection.open_table(conn, "docs", timeout_ms: timeout)
+      assert {:ok, 1} = LanceDB.Table.count_rows(table)
+
+      assert {:error, %LanceDB.Error{operation: :open_table, kind: :not_found}} =
+               LanceDB.Connection.open_table(conn, "missing", timeout_ms: timeout)
+    end
+  end
+
+  test "invalid deadlines fail before native execution" do
+    for timeout <- [0, -1, 1.0, true, "100", :infinity, 4_294_967_296] do
+      assert_raise ArgumentError, ~r/timeout_ms/, fn ->
+        LanceDB.connect("unused", %{}, timeout_ms: timeout)
+      end
+
+      assert_raise ArgumentError, ~r/timeout_ms/, fn ->
+        LanceDB.Connection.open_table(:unused, "docs", timeout_ms: timeout)
+      end
+    end
+  end
+
   test "invalid open and listing options fail before native calls" do
     for opts <- [
           [branch: ""],

@@ -58,6 +58,15 @@ defmodule LanceDB.Options do
     version
   end
 
+  def timeout_ms!(nil), do: nil
+
+  def timeout_ms!(value) do
+    if !(is_integer(value) and value > 0 and value <= 4_294_967_295),
+      do: raise(ArgumentError, "timeout_ms must be nil or a positive uint32 integer")
+
+    value
+  end
+
   def metadata!(values, allow_delete \\ false)
 
   def metadata!(values, allow_delete) when is_map(values) and not is_struct(values) do

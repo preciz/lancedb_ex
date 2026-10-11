@@ -9,12 +9,21 @@ defmodule LanceDB.Connection do
   alias LanceDB.Backend
   alias LanceDB.Options
 
-  @doc "Connects to local or object storage. Options: read_consistency_interval_ms; storage options are passed to the SDK."
+  @doc """
+  Connects to local or object storage. Storage options are passed to the SDK.
+
+  `:read_consistency_interval_ms` is nil or a non-negative uint32 interval.
+  `:timeout_ms` is nil (no wrapper deadline) or a positive uint32 millisecond
+  deadline for the full native connection. Expiry returns `Error.kind == :timeout`.
+  Native work yields BEAM schedulers and cancels on caller death. Cancellation
+  is cooperative: synchronous SDK work cannot be preempted, and SDK storage
+  tasks may finish after the caller's operation ends.
+  """
   @spec connect(String.t(), map(), keyword()) :: result(connection())
   def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ [])
       when is_binary(uri) and is_map(storage_options) do
     LanceDB.Execution.run(:connect, fn ->
-      opts = Keyword.validate!(opts, [:read_consistency_interval_ms])
+      opts = Keyword.validate!(opts, [:read_consistency_interval_ms, :timeout_ms])
       interval = Keyword.get(opts, :read_consistency_interval_ms)
 
       if !(is_nil(interval) or
@@ -26,7 +35,10 @@ defmodule LanceDB.Connection do
       storage_options =
         LanceDB.StorageOptions.normalize!(storage_options)
 
-      Backend.connect(uri, storage_options, interval)
+      Backend.connect(uri, storage_options, %{
+        read_consistency_interval_ms: interval,
+        timeout_ms: Options.timeout_ms!(opts[:timeout_ms])
+      })
     end)
   end
 
@@ -117,7 +129,15 @@ defmodule LanceDB.Connection do
     end)
   end
 
-  @doc "Opens a table. Options: branch, version, location, storage_options, index_cache_size_bytes and metadata_cache_size_bytes."
+  @doc """
+  Opens a table. Options: branch, version, location, storage_options,
+  index_cache_size_bytes, metadata_cache_size_bytes and timeout_ms.
+
+  `:timeout_ms` is nil or a positive uint32 millisecond deadline covering the
+  entire native open, including a dedicated cache session's connection.
+  Expiry returns `Error.kind == :timeout`. Native work yields BEAM schedulers
+  and cancels on caller death, with the cooperative limits of `connect/3`.
+  """
   @spec open_table(connection(), String.t(), keyword()) :: result(table())
   def open_table(conn, name, opts \\ []) do
     LanceDB.Execution.run(:open_table, fn ->
@@ -130,7 +150,8 @@ defmodule LanceDB.Connection do
           :location,
           :storage_options,
           :index_cache_size_bytes,
-          :metadata_cache_size_bytes
+          :metadata_cache_size_bytes,
+          :timeout_ms
         ])
 
       options =
@@ -143,6 +164,9 @@ defmodule LanceDB.Connection do
 
           {:storage_options, values} ->
             {:storage_options, LanceDB.StorageOptions.normalize!(values)}
+
+          {:timeout_ms, value} ->
+            {:timeout_ms, Options.timeout_ms!(value)}
 
           {key, value} ->
             {key, cache_size!(value)}

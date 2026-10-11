@@ -37,6 +37,7 @@ mod metrics;
 mod projection;
 mod query;
 mod ranking;
+mod read_task;
 mod reply;
 mod rerank;
 mod resources;

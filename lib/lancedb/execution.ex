@@ -7,7 +7,9 @@ defmodule LanceDB.Execution do
   finish if limits are lowered. Limits bound concurrency, not memory per operation.
 
   Query deadlines are cooperative, include cursor idle time, and cannot preempt
-  synchronous codecs. Cursor owner death cancels reads. Writer owner death errors
+  synchronous codecs. Connect and open also accept cooperative native deadlines
+  and cancel on caller death. Their storage waits run on Tokio and retain no
+  BEAM scheduler. Cursor owner death cancels reads. Writer owner death errors
   input and awaits the native result; cancellation never promises rollback after
   final commit has begun. No table process or connection pool is created.
   """

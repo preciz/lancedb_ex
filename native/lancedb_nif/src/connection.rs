@@ -3,18 +3,32 @@ mod config;
 pub(crate) use config::ConnectionConfig;
 
 use crate::resources::{atoms, ConnectionResource, RUNTIME};
-use rustler::{Atom, ResourceArc};
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[derive(Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConnectOptions {
+    read_consistency_interval_ms: Option<u32>,
+    timeout_ms: Option<u32>,
+}
+
+#[rustler::nif]
 fn connect(
+    env: Env<'_>,
     uri: String,
     storage_options: HashMap<String, String>,
-    read_consistency_interval_ms: Option<u32>,
-) -> Result<ResourceArc<ConnectionResource>, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
-        let config = ConnectionConfig::new(uri, storage_options, read_consistency_interval_ms);
+    options: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    let options: ConnectOptions = serde_json::from_str(&options).map_err(Failure::from_error)?;
+    let deadline = crate::execution::ExecutionOptions {
+        timeout_ms: options.timeout_ms,
+    }
+    .deadline_for("Connection");
+    crate::read_task::spawn(env, reference, deadline, async move {
+        let config =
+            ConnectionConfig::new(uri, storage_options, options.read_consistency_interval_ms);
         let conn = config.connect(None).await.map_err(|e| {
             let message = format!("Failed to connect: {e}");
             Failure::from_error(e).context(message)

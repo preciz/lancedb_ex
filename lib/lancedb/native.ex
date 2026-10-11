@@ -121,11 +121,15 @@ defmodule LanceDB.Native do
   def metrics_catalog, do: :erlang.nif_error(:nif_not_loaded)
   def metrics_snapshot, do: :erlang.nif_error(:nif_not_loaded)
 
-  def connect(_uri, _storage_options, _read_consistency_interval_ms),
+  def connect(uri, storage_options, options),
+    do: async_call(:connect, [uri, storage_options, options])
+
+  def connect(_uri, _storage_options, _options, _reference),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def table_names(_conn, _start_after, _limit), do: :erlang.nif_error(:nif_not_loaded)
-  def open_table(_conn, _name, _options), do: :erlang.nif_error(:nif_not_loaded)
+  def open_table(conn, name, options), do: async_call(:open_table, [conn, name, options])
+  def open_table(_conn, _name, _options, _reference), do: :erlang.nif_error(:nif_not_loaded)
   def drop_table(_conn, _name), do: :erlang.nif_error(:nif_not_loaded)
 
   def batch_infer(_rows), do: :erlang.nif_error(:nif_not_loaded)

@@ -51,15 +51,7 @@ defmodule LanceDB.ObjectStoreFixture do
     query = URI.decode_query(uri.query || "")
     key = uri.path |> URI.decode() |> String.replace_prefix("/probe/", "")
 
-    response =
-      if Map.has_key?(query, "list-type") or Map.has_key?(query, "prefix") do
-        {200, [], listing(state.objects, query)}
-      else
-        case Map.fetch(state.objects, key) do
-          {:ok, data} -> object(data, headers)
-          :error -> {404, [], ""}
-        end
-      end
+    response = response(state.objects, key, query, headers)
 
     if not is_nil(state.owner) and hold_request?(state.requests, method, key, state.objects) do
       reference = make_ref()
@@ -80,6 +72,24 @@ defmodule LanceDB.ObjectStoreFixture do
 
   defp hold_request?(:objects, method, key, objects),
     do: method == :GET and Map.has_key?(objects, key)
+
+  # Hold SDK region resolution locally without contacting AWS or using real credentials.
+  defp response(_objects, "/latest/api/token", _query, _headers),
+    do: {200, "x-aws-ec2-metadata-token-ttl-seconds: 21600\r\n", "fixture"}
+
+  defp response(_objects, "/latest/meta-data/placement/region", _query, _headers),
+    do: {200, [], "us-east-1"}
+
+  defp response(objects, key, query, headers) do
+    if Map.has_key?(query, "list-type") or Map.has_key?(query, "prefix") do
+      {200, [], listing(objects, query)}
+    else
+      case Map.fetch(objects, key) do
+        {:ok, data} -> object(data, headers)
+        :error -> {404, [], ""}
+      end
+    end
+  end
 
   defp accept(socket, server) do
     case :gen_tcp.accept(socket) do

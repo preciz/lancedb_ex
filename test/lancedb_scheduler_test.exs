@@ -16,6 +16,15 @@ defmodule LanceDB.SchedulerTest do
   end
 
   @tag timeout: 45_000
+  test "connect and open yield schedulers and release admission on cancellation", %{path: path} do
+    {output, status} = run_fixture("open_schedulers.ex", path, 1, 1)
+    assert status == 0, output
+
+    assert output =~
+             "connect and open yield schedulers; deadlines and caller death release admission"
+  end
+
+  @tag timeout: 45_000
   test "held history and branch storage leaves dirty CPU work available", %{path: path} do
     {output, status} = run_fixture("metadata_schedulers.ex", path, 1, 2)
     assert status == 0, output
