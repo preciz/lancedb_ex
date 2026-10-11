@@ -13,7 +13,8 @@ enum SourceRef {
     Branch { name: String, version: Option<u64> },
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+// Branch metadata operations can block on local storage or S3.
+#[rustler::nif(schedule = "DirtyIo")]
 fn create_branch(
     table: ResourceArc<TableResource>,
     name: String,
@@ -43,7 +44,7 @@ fn create_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn checkout_branch(
     table: ResourceArc<TableResource>,
     name: String,
@@ -62,7 +63,7 @@ fn checkout_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn list_branches(table: ResourceArc<TableResource>) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -83,7 +84,7 @@ fn current_branch(table: ResourceArc<TableResource>) -> Result<String, Failure> 
         .unwrap_or_else(|| "main".into()))
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn delete_branch(table: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::write()?;

@@ -15,12 +15,19 @@ defmodule LanceDB.SchedulerTest do
     assert output =~ "job waiters yield schedulers; deadlines and cancellation remain available"
   end
 
-  defp run_fixture(fixture, path) do
+  @tag timeout: 45_000
+  test "held history and branch storage leaves dirty CPU work available", %{path: path} do
+    {output, status} = run_fixture("metadata_schedulers.ex", path, 1, 2)
+    assert status == 0, output
+    assert output =~ "history and branch storage leaves dirty CPU work available"
+  end
+
+  defp run_fixture(fixture, path, cpu_schedulers \\ 2, io_schedulers \\ 1) do
     System.cmd(
       System.find_executable("elixir"),
       [
         "--erl",
-        "+S 2:2 +SDcpu 2:2 +SDio 1",
+        "+S 2:2 +SDcpu #{cpu_schedulers}:#{cpu_schedulers} +SDio #{io_schedulers}",
         "-pa",
         Path.join(Mix.Project.build_path(), "lib/*/ebin"),
         Path.join("test/fixtures", fixture),

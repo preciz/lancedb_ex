@@ -3,7 +3,8 @@ use crate::resources::{atoms, TableResource, RUNTIME};
 use rustler::{Atom, ResourceArc};
 use std::collections::HashMap;
 
-#[rustler::nif(schedule = "DirtyCpu")]
+// These metadata calls wait on storage inside block_on, retaining the NIF thread.
+#[rustler::nif(schedule = "DirtyIo")]
 fn list_tags(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -18,7 +19,7 @@ fn list_tags(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn tag_version(table_res: ResourceArc<TableResource>, name: String) -> Result<u64, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -27,7 +28,7 @@ fn tag_version(table_res: ResourceArc<TableResource>, name: String) -> Result<u6
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn tag_action(
     table_res: ResourceArc<TableResource>,
     action: String,
@@ -61,7 +62,7 @@ fn tag_action(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn table_version(table_res: ResourceArc<TableResource>) -> Result<u64, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -69,7 +70,7 @@ fn table_version(table_res: ResourceArc<TableResource>) -> Result<u64, Failure> 
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn list_versions(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -87,7 +88,7 @@ fn list_versions(table_res: ResourceArc<TableResource>) -> Result<String, Failur
 
 // SDK branch checkout creates an independent DatasetConsistencyWrapper, including
 // for main. Cloning Table/Arc alone would still share the mutable view.
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn snapshot_table(
     table: ResourceArc<TableResource>,
     version: Option<u64>,
@@ -116,7 +117,7 @@ fn snapshot_table(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn restore_version(
     table: ResourceArc<TableResource>,
     version: u64,

@@ -3,7 +3,7 @@ defmodule LanceDB.ObjectStoreFixture do
   use GenServer
 
   # A read-only S3 fixture backed by an in-memory copy of a local LanceDB table.
-  # Holding GETs uses messages, never file I/O or a BEAM dirty scheduler.
+  # Holding responses uses messages, never file I/O or a BEAM dirty scheduler.
   def start_link(root) do
     objects =
       root
@@ -16,7 +16,10 @@ defmodule LanceDB.ObjectStoreFixture do
   end
 
   def port(server), do: GenServer.call(server, :port)
-  def hold(server), do: GenServer.call(server, {:hold, self()})
+
+  def hold(server, requests \\ :objects) when requests in [:objects, :all],
+    do: GenServer.call(server, {:hold, self(), requests})
+
   def release(server), do: GenServer.call(server, :release)
 
   @impl true
@@ -27,12 +30,16 @@ defmodule LanceDB.ObjectStoreFixture do
     {:ok, {_, port}} = :inet.sockname(socket)
     server = self()
     acceptor = spawn_link(fn -> accept(socket, server) end)
-    {:ok, %{objects: objects, port: port, acceptor: acceptor, owner: nil, held: []}}
+
+    {:ok,
+     %{objects: objects, port: port, acceptor: acceptor, owner: nil, requests: :objects, held: []}}
   end
 
   @impl true
   def handle_call(:port, _from, state), do: {:reply, state.port, state}
-  def handle_call({:hold, owner}, _from, state), do: {:reply, :ok, %{state | owner: owner}}
+
+  def handle_call({:hold, owner, requests}, _from, state),
+    do: {:reply, :ok, %{state | owner: owner, requests: requests}}
 
   def handle_call(:release, _from, state) do
     for {pid, reference} <- state.held, do: send(pid, reference)
@@ -54,7 +61,7 @@ defmodule LanceDB.ObjectStoreFixture do
         end
       end
 
-    if method == :GET and not is_nil(state.owner) and Map.has_key?(state.objects, key) do
+    if not is_nil(state.owner) and hold_request?(state.requests, method, key, state.objects) do
       reference = make_ref()
       send(state.owner, {self(), :blocked, key})
       {:reply, {response, reference}, %{state | held: [{pid, reference} | state.held]}}
@@ -68,6 +75,11 @@ defmodule LanceDB.ObjectStoreFixture do
     Process.unlink(state.acceptor)
     Process.exit(state.acceptor, :shutdown)
   end
+
+  defp hold_request?(:all, _method, _key, _objects), do: true
+
+  defp hold_request?(:objects, method, key, objects),
+    do: method == :GET and Map.has_key?(objects, key)
 
   defp accept(socket, server) do
     case :gen_tcp.accept(socket) do
@@ -99,7 +111,7 @@ defmodule LanceDB.ObjectStoreFixture do
       receive do
         ^reference -> :ok
       after
-        10_000 -> raise "S3 fixture GET was not released"
+        10_000 -> raise "S3 fixture response was not released"
       end
     end
 
