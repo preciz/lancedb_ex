@@ -160,7 +160,7 @@ does not expose deep cloning or branch diff and merge.
 ## Table-open controls and listing
 
 Connect/open deadlines, initial connection cache budgets, and cache statistics
-are additions in the `0.1.1` source candidate. See
+are additions in `0.1.1`. See
 [installation](installation.md#current-native-build) for the required native build.
 
 Both connection and table opens accept an optional `timeout_ms`:

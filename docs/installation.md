@@ -35,7 +35,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.1.0"}
+    {:lancedb_ex, "~> 0.1.1"}
   ]
 end
 ```
@@ -50,10 +50,8 @@ mix compile
 A URL override and a supervision tree entry are not necessary.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
-default artifact URL. The published package version is `0.1.0`; this checkout
-prepares `0.1.1`. Its new native binaries are pending, so running the current
-source requires an [explicit source build](native-builds.md#explicit-maintainer-source-builds).
-The package pins the SDK version to `=0.37.1`. These versions do not identify the
+default artifact URL. The Elixir package version is `0.1.1`, and the package
+pins the SDK version to `=0.37.1`. These versions do not identify the
 wrapper binary. Each native build has the SemVer version
 `0.0.0+<full-source-revision>`.
 
@@ -65,33 +63,31 @@ release.
 ### Current native build
 
 The selected native build is
-[`0.0.0+c922f11b2a7465c8a96d7863479d21974f0e9405`](https://github.com/preciz/lancedb_ex/releases/tag/native-c922f11b2a7465c8a96d7863479d21974f0e9405).
+[`0.0.0+9b2592dec2a10c98b9e03913293126af4d0ba002`](https://github.com/preciz/lancedb_ex/releases/tag/native-9b2592dec2a10c98b9e03913293126af4d0ba002).
 Its exact source revision is
-[`c922f11b2a7465c8a96d7863479d21974f0e9405`](https://github.com/preciz/lancedb_ex/commit/c922f11b2a7465c8a96d7863479d21974f0e9405).
-It uses SDK `0.37.1` and NIF ABI `2.15`. This is the build selected for the
-published `0.1.0` package. It does not contain the new native APIs in the
-`0.1.1` source candidate.
+[`9b2592dec2a10c98b9e03913293126af4d0ba002`](https://github.com/preciz/lancedb_ex/commit/9b2592dec2a10c98b9e03913293126af4d0ba002).
+It uses SDK `0.37.1` and NIF ABI `2.15`, and includes the `0.1.1` native APIs.
 
 Both Linux targets passed their Rust and Elixir tests. The
-[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38132611907)
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38165390696)
 also checked fresh consumers on both targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
-and completed a write and query without Rust or credentials.
+and completed a write and query without Rust or credentials. The checks also
+verified connect/open deadlines, initial connection cache budgets, cache
+statistics, and a production application release on each target.
 
 To use the released source with its verified archives, pin the Git dependency:
 
 ```elixir
-{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.1.0"}
+{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.1.1"}
 ```
 
 Then run `mix deps.get` and `mix compile`. This installation uses the
 published native archives. It does not compile Rust.
 
-For a dependency on the current `main` branch, install the source-build
-requirements and set `LANCEDB_BUILD=true` before `mix deps.get` and
-`mix compile`. Keep that flag set until a new verified native build has been
-selected for these changes. The published `0.1.0` archives cannot validate
-the current source API.
+Git checkouts must contain matching build and checksum manifests for their
+native changes. To test unpublished Rust changes, use an
+[explicit source build](native-builds.md#explicit-maintainer-source-builds).
 
 See [Building precompiled artifacts](native-builds.md#building-precompiled-artifacts) for the publication procedure.
 

@@ -10,7 +10,7 @@ when updating callers from those checkouts. Both `Query.new/2` and `new/3`
 take the table first: `Query.new(table, opts)` or
 `Query.new(table, source, opts)`.
 
-The `0.1.1` source candidate adds optional connect/open deadlines, initial
+Version `0.1.1` adds optional connect/open deadlines, initial
 connection cache budgets, and `Table.cache_stats/1`; existing API signatures
 remain compatible. See [table-open controls](tables.md#table-open-controls-and-listing).
 
