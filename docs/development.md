@@ -6,7 +6,7 @@ Run all commands from the package directory.
 
 ## Development
 
-Use rustup so `rust-toolchain.toml` selects Rust 1.99.0 and rustfmt.
+Use rustup so `rust-toolchain.toml` selects Rust 1.99.0, rustfmt and Clippy.
 Run these checks from the package directory. Set the source-build flag
 before you get dependencies:
 
@@ -18,6 +18,7 @@ mix credo --strict
 mix compile --warnings-as-errors
 mix test --cover
 cargo fmt --all --check
+cargo clippy --locked --release --all-targets -p lancedb_nif -- -D warnings
 cargo test --locked --release -p lancedb_nif
 ```
 
@@ -89,7 +90,8 @@ mix test test/properties/lancedb_write_failure_test.exs --seed 12345
 scripts/test_s3.sh
 ```
 
-CI runs formatting, strict linting, locked Cargo tests and the full Elixir
+CI runs formatting, strict Elixir linting, Clippy with warnings denied for
+all native targets, locked Cargo tests and the full Elixir
 suite with coverage. It also replays every property with seeds `0` and
 `12345`, in addition to the full suite's random seed. Elixir line coverage
 must be at least 90%. Coverage excludes test support and the internal NIF module,

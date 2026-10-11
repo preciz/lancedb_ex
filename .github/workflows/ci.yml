@@ -26,7 +26,7 @@ jobs:
           elixir-version: '1.20'
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
-          components: rustfmt
+          components: rustfmt, clippy
       - uses: actions/cache@v4
         with:
           path: |
@@ -42,6 +42,7 @@ jobs:
       - run: cargo fmt --all --check
       - name: Validate committed Cargo lockfile before Rustler runs
         run: cargo metadata --locked --format-version=1 > /dev/null
+      - run: cargo clippy --locked --release --all-targets -p lancedb_nif -- -D warnings
       - run: mix compile --warnings-as-errors
       - run: mix docs --warnings-as-errors
       - run: env -u LANCEDB_BUILD mix hex.build
