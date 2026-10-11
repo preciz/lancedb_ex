@@ -154,8 +154,10 @@ defmodule LanceDB.Query do
   @spec query(LanceDB.Table.t(), keyword()) :: LanceDB.result([map()])
   def query(table, opts \\ []), do: all(new(table, opts))
   @doc "Retrieves rows by internal ID."
+  @spec take_row_ids(LanceDB.Table.t(), [non_neg_integer()], keyword()) :: LanceDB.result([map()])
   def take_row_ids(table, ids, opts \\ []), do: all(new(table, {:take, :row_ids, ids}, opts))
   @doc "Retrieves rows by physical offset."
+  @spec take_offsets(LanceDB.Table.t(), [non_neg_integer()], keyword()) :: LanceDB.result([map()])
   def take_offsets(table, offsets, opts \\ []),
     do: all(new(table, {:take, :row_offsets, offsets}, opts))
 
