@@ -42,33 +42,37 @@ defmodule LanceDB.Connection do
   def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ [])
       when is_binary(uri) and is_map(storage_options) do
     LanceDB.Execution.run(:connect, fn ->
-      opts =
-        Keyword.validate!(opts, [
-          :read_consistency_interval_ms,
-          :timeout_ms,
-          :index_cache_size_bytes,
-          :metadata_cache_size_bytes
-        ])
+      Backend.connect(
+        uri,
+        LanceDB.StorageOptions.normalize!(storage_options),
+        connect_options!(opts)
+      )
+    end)
+  end
 
-      interval = Keyword.get(opts, :read_consistency_interval_ms)
+  @doc false
+  @spec connect_options!(keyword()) :: map()
+  def connect_options!(opts) do
+    opts =
+      Keyword.validate!(opts, [
+        :read_consistency_interval_ms,
+        :timeout_ms,
+        :index_cache_size_bytes,
+        :metadata_cache_size_bytes
+      ])
 
-      if !(is_nil(interval) or
-             (is_integer(interval) and interval >= 0 and interval <= 4_294_967_295)) do
-        raise ArgumentError,
-              "read_consistency_interval_ms must be nil or a non-negative uint32 integer"
-      end
+    interval = Keyword.get(opts, :read_consistency_interval_ms)
 
-      storage_options =
-        LanceDB.StorageOptions.normalize!(storage_options)
+    if !(is_nil(interval) or
+           (is_integer(interval) and interval >= 0 and interval <= 4_294_967_295)) do
+      raise ArgumentError,
+            "read_consistency_interval_ms must be nil or a non-negative uint32 integer"
+    end
 
-      options =
-        Map.new(opts, fn
-          {:read_consistency_interval_ms, _value} -> {:read_consistency_interval_ms, interval}
-          {:timeout_ms, value} -> {:timeout_ms, Options.timeout_ms!(value)}
-          {key, value} -> {key, cache_size!(value)}
-        end)
-
-      Backend.connect(uri, storage_options, options)
+    Map.new(opts, fn
+      {:read_consistency_interval_ms, _} -> {:read_consistency_interval_ms, interval}
+      {:timeout_ms, value} -> {:timeout_ms, Options.timeout_ms!(value)}
+      {key, value} -> {key, cache_size!(value)}
     end)
   end
 

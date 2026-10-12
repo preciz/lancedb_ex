@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in, application-supervised `LanceDB.TableCache`: shared table opens,
+  retained sessions, bounded background multi-index warming, LRU/idle eviction,
+  explicit invalidation, status and telemetry. Track table version and index UUID
+  so changed indexes can be warmed again; discard stale task results.
 - Remove the obsolete pre-release migration guide and redundant table type aliases.
 - Move blocking table/index inspection, index prewarming and deletion, and table
   listing/deletion to dirty I/O schedulers so storage waits leave dirty CPU

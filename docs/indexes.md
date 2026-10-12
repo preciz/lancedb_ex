@@ -223,6 +223,10 @@ including indexes on a checked-out snapshot. Missing indexes return an
 error. Prewarming does not build an index or add unindexed rows. Cached
 pages can later be evicted.
 
+Applications retaining live handles can use [TableCache](table-cache.md) to
+schedule multiple indexes in the background, share concurrent warming work,
+and inspect failures without blocking table lookup.
+
 ## Typed vectors and native index jobs
 
 Use an explicit schema to select vector storage. `{:vector, 384}` uses

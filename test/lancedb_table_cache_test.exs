@@ -1,0 +1,575 @@
+defmodule LanceDB.TableCacheTest do
+  use LanceDB.DataCase, async: false
+
+  alias LanceDB.{
+    Connection,
+    Error,
+    Execution,
+    Index,
+    Maintenance,
+    Query,
+    Table,
+    TableCache
+  }
+
+  alias LanceDB.TableCache.Warming
+
+  setup %{path: path} do
+    {:ok, conn} = Connection.connect(path, %{}, read_consistency_interval_ms: 0)
+    rows = for id <- 1..100, do: %{id: id, text: "document #{id}", title: "title #{id}"}
+    {:ok, table} = Connection.create_table(conn, "docs", rows)
+    {:ok, :created} = Index.create(table, :text, type: :fts, name: "words")
+    {:ok, :created} = Index.create(table, :title, type: :fts, name: "titles")
+    for name <- ["other", "third"], do: Connection.create_table(conn, name, rows)
+    %{conn: conn, table: table}
+  end
+
+  test "shares concurrent opens and a slow table does not block another table", %{path: path} do
+    cache = cache(path)
+    handler = block(cache, :cache_open, "docs")
+    callers = for _ <- 1..20, do: Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, worker}, 2_000
+    assert_eventually(fn -> map_size(:sys.get_state(cache).entries["docs"].waiters) == 20 end)
+    assert {:ok, other} = TableCache.fetch(cache, "other")
+    assert {:ok, 100} = Table.count_rows(other)
+    refute_receive {:blocked, _}, 50
+    :telemetry.detach(handler)
+    send(worker, :continue)
+
+    handles =
+      Enum.map(callers, fn caller ->
+        {:ok, table} = Task.await(caller)
+        table
+      end)
+
+    assert Enum.uniq(handles) == [hd(handles)]
+    assert {:ok, table} = TableCache.fetch(cache, "docs")
+    assert table == hd(handles)
+  end
+
+  test "LRU and idle expiry release entries without revoking caller handles", %{path: path} do
+    cache = cache(path, max_tables: 2)
+    {:ok, old} = TableCache.fetch(cache, "docs")
+    {:ok, _} = TableCache.fetch(cache, "other")
+    {:ok, ^old} = TableCache.fetch(cache, "docs")
+    {:ok, _} = TableCache.fetch(cache, "third")
+    assert {:error, %Error{kind: :not_found}} = TableCache.status(cache, "other")
+    assert {:ok, ^old} = TableCache.fetch(cache, "docs")
+    assert {:ok, 100} = Table.count_rows(old)
+
+    idle = cache(path, idle_timeout_ms: 30)
+    {:ok, first} = TableCache.fetch(idle, "docs")
+
+    assert_eventually(fn ->
+      match?({:error, %Error{kind: :not_found}}, TableCache.status(idle, "docs"))
+    end)
+
+    assert {:ok, second} = TableCache.fetch(idle, "docs")
+    assert second != first
+    assert {:ok, 100} = Table.count_rows(first)
+  end
+
+  test "open concurrency remains bounded when an in-flight entry is invalidated", %{path: path} do
+    cache = cache(path, max_tables: 1, max_opens: 1)
+    handler = block(cache, :cache_open, :any)
+    first = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, worker}, 2_000
+    assert {:error, %Error{kind: :busy}} = TableCache.fetch(cache, "other")
+    :ok = TableCache.invalidate(cache, "docs")
+    assert {:error, %Error{kind: :cancelled}} = Task.await(first)
+    second = Task.async(fn -> TableCache.fetch(cache, "other") end)
+
+    assert_eventually(fn ->
+      match?(%{opening: :queued}, :sys.get_state(cache).entries["other"])
+    end)
+
+    refute_receive {:blocked, _}, 50
+    send(worker, :continue)
+    assert_receive {:blocked, second_worker}, 2_000
+    :telemetry.detach(handler)
+    send(second_worker, :continue)
+    assert {:ok, _} = Task.await(second)
+    assert {:error, %Error{kind: :not_found}} = TableCache.status(cache, "docs")
+  end
+
+  test "failed opens and crashed connection/open tasks can be retried", %{path: path, conn: conn} do
+    cache = cache(path)
+    handler = block(cache, :cache_connect, nil)
+    caller = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, worker}, 2_000
+    :telemetry.detach(handler)
+    Process.exit(worker, :kill)
+    assert {:error, %Error{kind: :execution}} = Task.await(caller)
+    assert Process.alive?(cache)
+
+    assert {:error, %Error{kind: :not_found}} = TableCache.fetch(cache, "missing")
+    {:ok, _} = Connection.create_table(conn, "missing", [%{id: 1}])
+    assert {:ok, _} = TableCache.fetch(cache, "missing")
+
+    handler = block(cache, :cache_open, "docs")
+    caller = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, worker}, 2_000
+    :telemetry.detach(handler)
+    Process.exit(worker, :kill)
+    assert {:error, %Error{kind: :execution}} = Task.await(caller)
+    assert {:ok, _} = TableCache.fetch(cache, "docs")
+  end
+
+  test "invalidation cannot be undone by a late open result", %{path: path} do
+    cache = cache(path)
+    handler = block(cache, :cache_open, "docs")
+    old_caller = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, old_worker}, 2_000
+    assert :ok = TableCache.invalidate(cache, "docs")
+    assert {:error, %Error{kind: :cancelled}} = Task.await(old_caller)
+    new_caller = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_receive {:blocked, new_worker}, 2_000
+    send(old_worker, :continue)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).tasks) == 1 end)
+    assert Task.yield(new_caller, 50) == nil
+    assert :sys.get_state(cache).entries["docs"].table == nil
+    :telemetry.detach(handler)
+    send(new_worker, :continue)
+    assert {:ok, _} = Task.await(new_caller)
+  end
+
+  test "timeouts and caller death remove waiters and request saturation stays bounded", %{
+    path: path
+  } do
+    cache = cache(path, max_requests: 1, max_tables: 1, max_opens: 1)
+    handler = block(cache, :cache_open, "docs")
+    caller = Task.async(fn -> TableCache.fetch(cache, "docs", timeout_ms: 30) end)
+    assert_receive {:blocked, worker}, 2_000
+    assert {:error, %Error{kind: :busy}} = TableCache.fetch(cache, "other")
+    assert {:error, %Error{kind: :timeout}} = Task.await(caller)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).entries["docs"].waiters) == 0 end)
+    caller = spawn(fn -> TableCache.fetch(cache, "docs", timeout_ms: nil) end)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).entries["docs"].waiters) == 1 end)
+    Process.exit(caller, :kill)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).entries["docs"].waiters) == 0 end)
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    assert {:ok, _} = TableCache.fetch(cache, "docs")
+  end
+
+  test "warming shares work, keeps lookup/query available, and reuses the fetched session", %{
+    path: path
+  } do
+    cache = cache(path, index_cache_size_bytes: 16 * 1024 * 1024)
+    handler = block(cache, :cache_warm, "docs")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words, "titles"])
+    assert_receive {:blocked, worker}, 2_000
+
+    for _ <- 1..20 do
+      assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words, :titles])
+    end
+
+    assert {:ok, table} = TableCache.fetch(cache, "docs")
+    assert {:ok, [%{"id" => 1}]} = Query.query(table, columns: [:id], limit: 1)
+
+    assert {:ok, %{"words" => %Warming{status: :running}, "titles" => %Warming{status: :running}}} =
+             TableCache.status(cache, "docs")
+
+    refute_receive {:blocked, _}, 50
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    await_warmed(cache, "docs", ["words", "titles"])
+    assert {:ok, ^table} = TableCache.fetch(cache, "docs")
+    assert {:ok, stats} = Table.cache_stats(table)
+    assert stats["index"]["num_entries"] > 0
+    assert {:ok, rows} = Query.full_text_search(table, "document", text_column: :text)
+    assert rows != []
+    {:ok, after_query} = Table.cache_stats(table)
+    assert after_query["index"]["hits"] > stats["index"]["hits"]
+  end
+
+  test "completed warming is skipped until replacement or extension changes its identity", %{
+    path: path
+  } do
+    cache = cache(path)
+    watch(cache)
+    {:ok, table} = TableCache.fetch(cache, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    assert_receive {:observed, [:lancedb, :operation, :start], _, %{operation: :prewarm_index}}
+    {:ok, %{"words" => before}} = TableCache.status(cache, "docs")
+
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+
+    refute_receive {:observed, [:lancedb, :operation, :start], _, %{operation: :prewarm_index}},
+                   50
+
+    {:ok, _} = Table.add(table, [%{id: 101, text: "new document", title: "new title"}])
+    {:ok, :optimized} = Maintenance.optimize_indices(table, num_indices_to_merge: 0)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    assert_receive {:observed, [:lancedb, :operation, :start], _, %{operation: :prewarm_index}}
+    {:ok, %{"words" => extended}} = TableCache.status(cache, "docs")
+    assert extended.index_uuid == before.index_uuid
+    assert extended.version > before.version
+
+    {:ok, :created} = Index.create(table, :text, type: :fts, name: "words", replace: true)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    assert_receive {:observed, [:lancedb, :operation, :start], _, %{operation: :prewarm_index}}
+    {:ok, %{"words" => replacement}} = TableCache.status(cache, "docs")
+    assert replacement.index_uuid != extended.index_uuid
+  end
+
+  test "indexes added to a running batch queue once and failed table opens are retryable", %{
+    path: path,
+    conn: conn
+  } do
+    cache = cache(path)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "missing", indexes: [:words])
+
+    assert_eventually(fn ->
+      match?(
+        {:ok, %{"words" => %Warming{status: :failed, error: %Error{kind: :not_found}}}},
+        TableCache.status(cache, "missing")
+      )
+    end)
+
+    {:ok, table} = Connection.create_table(conn, "missing", [%{text: "document"}])
+    {:ok, :created} = Index.create(table, :text, type: :fts, name: "words")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "missing", indexes: [:words])
+    await_warmed(cache, "missing", ["words"])
+
+    handler = block(cache, :cache_warm, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, first}, 2_000
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words, :titles])
+
+    assert {:ok, %{"words" => %Warming{status: :running}, "titles" => %Warming{status: :queued}}} =
+             TableCache.status(cache, "docs")
+
+    refute_receive {:blocked, _}, 50
+    send(first, :continue)
+    assert_receive {:blocked, second}, 2_000
+    assert {:ok, %{"words" => %Warming{status: :completed}}} = TableCache.status(cache, "docs")
+    :telemetry.detach(handler)
+    send(second, :continue)
+    await_warmed(cache, "docs", ["words", "titles"])
+  end
+
+  test "failed and crashed warmers release attempts for retry and emit failure telemetry", %{
+    path: path
+  } do
+    cache = cache(path)
+    watch(cache)
+    {:ok, table} = TableCache.fetch(cache, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:missing, :words])
+    await_warmed(cache, "docs", ["words"])
+
+    assert {:ok, %{"missing" => %Warming{status: :failed, error: %Error{kind: :not_found}}}} =
+             TableCache.status(cache, "docs")
+
+    assert_receive {:observed, [:lancedb, :table_cache, :warm], _,
+                    %{index_name: "missing", status: :failed, error_kind: :not_found}}
+
+    {:ok, :created} = Index.create(table, :title, type: :fts, name: "missing")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:missing])
+    await_warmed(cache, "docs", ["missing"])
+
+    handler = block(cache, :cache_warm, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, worker}, 2_000
+    :telemetry.detach(handler)
+    Process.exit(worker, :kill)
+
+    assert_eventually(fn ->
+      match?(
+        {:ok, %{"words" => %Warming{status: :failed, error: %Error{kind: :execution}}}},
+        TableCache.status(cache, "docs")
+      )
+    end)
+
+    assert Process.alive?(cache)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+  end
+
+  test "warming concurrency and remembered records stay bounded", %{path: path, conn: conn} do
+    {:ok, other} = Connection.open_table(conn, "other")
+    {:ok, :created} = Index.create(other, :text, type: :fts, name: "words")
+    cache = cache(path, max_warmers: 1, max_requests: 2)
+    handler = block(cache, :cache_warm, :any)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, first}, 2_000
+    {:ok, :scheduled} = TableCache.prewarm(cache, "other", indexes: [:words])
+    assert {:error, %Error{kind: :busy}} = TableCache.prewarm(cache, "third", indexes: [:words])
+    refute_receive {:blocked, _}, 50
+    send(first, :continue)
+    assert_receive {:blocked, second}, 2_000
+    :telemetry.detach(handler)
+    send(second, :continue)
+    await_warmed(cache, "other", ["words"])
+    assert :ok = TableCache.invalidate(cache, "other")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:titles])
+    await_warmed(cache, "docs", ["titles"])
+  end
+
+  test "invalidation and eviction discard late warming results", %{path: path} do
+    cache = cache(path, max_tables: 1)
+    handler = block(cache, :cache_warm, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, old_worker}, 2_000
+    assert :ok = TableCache.invalidate(cache, "docs")
+    {:ok, new_table} = TableCache.fetch(cache, "docs")
+    send(old_worker, :continue)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).tasks) == 0 end)
+    assert {:ok, %{}} = TableCache.status(cache, "docs")
+    assert {:ok, ^new_table} = TableCache.fetch(cache, "docs")
+
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, old_worker}, 2_000
+    {:ok, _} = TableCache.fetch(cache, "other")
+    send(old_worker, :continue)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).tasks) == 0 end)
+    assert {:error, %Error{kind: :not_found}} = TableCache.status(cache, "docs")
+    :telemetry.detach(handler)
+  end
+
+  test "a replacement during warming cannot be marked completed", %{path: path} do
+    cache = cache(path)
+    {:ok, table} = TableCache.fetch(cache, "docs")
+    handler = block_operation(:prewarm_index)
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, worker}, 2_000
+    {:ok, :created} = Index.create(table, :text, type: :fts, name: "words", replace: true)
+    :telemetry.detach(handler)
+    send(worker, :continue)
+
+    assert_eventually(fn ->
+      match?(
+        {:ok, %{"words" => %Warming{status: :failed, error: %Error{kind: :conflict}}}},
+        TableCache.status(cache, "docs")
+      )
+    end)
+
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+  end
+
+  test "native admission failure is reported and retry works after capacity returns", %{
+    path: path
+  } do
+    cache = cache(path)
+    {:ok, table} = TableCache.fetch(cache, "docs")
+    Execution.configure(reads: 1)
+    on_exit(fn -> Execution.configure([]) end)
+    stream = Query.stream(Query.new(table), batch_size: 1)
+
+    {:suspended, _, continuation} =
+      Enumerable.reduce(stream, {:cont, nil}, fn row, _ -> {:suspend, row} end)
+
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+
+    assert_eventually(fn ->
+      match?(
+        {:ok, %{"words" => %Warming{status: :failed, error: %Error{kind: :busy}}}},
+        TableCache.status(cache, "docs")
+      )
+    end)
+
+    assert {:ok, ^table} = TableCache.fetch(cache, "docs")
+    continuation.({:halt, nil})
+    {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+  end
+
+  test "instances keep sessions separate and their task supervisor follows cache lifetime", %{
+    path: path
+  } do
+    first = cache(path, name: __MODULE__, index_cache_size_bytes: 16 * 1024 * 1024)
+    second = cache(path, index_cache_size_bytes: 0, metadata_cache_size_bytes: 0)
+    {:ok, table} = TableCache.fetch(__MODULE__, "docs")
+    {:ok, separate} = TableCache.fetch(second, "docs")
+    {:ok, :scheduled} = TableCache.prewarm(first, "docs", indexes: [:words])
+    await_warmed(first, "docs", ["words"])
+    {:ok, stats} = Table.cache_stats(table)
+    {:ok, isolated} = Table.cache_stats(separate)
+    assert stats["index"]["num_entries"] > 0
+    assert isolated["index"]["num_entries"] == 0
+    supervisor = :sys.get_state(first).supervisor
+    monitor = Process.monitor(supervisor)
+    GenServer.stop(first)
+    assert_receive {:DOWN, ^monitor, :process, ^supervisor, _}, 2_000
+  end
+
+  test "validates configuration and requests before touching storage", %{path: path} do
+    for opts <- [
+          [uri: nil],
+          [uri: path, max_tables: 0],
+          [uri: path, max_requests: nil],
+          [uri: path, max_warmers: -1],
+          [uri: path, max_opens: 0],
+          [uri: path, idle_timeout_ms: 0],
+          [uri: path, connect_timeout_ms: 0],
+          [uri: path, open_timeout_ms: 0],
+          [uri: path, index_cache_size_bytes: nil],
+          [uri: path, unknown: true]
+        ] do
+      assert_raise ArgumentError, fn -> TableCache.start_link(opts) end
+    end
+
+    cache = cache(path, idle_timeout_ms: nil, connect_timeout_ms: nil, open_timeout_ms: nil)
+
+    for names <- [nil, [], [:words, "words"], [123]] do
+      assert_raise ArgumentError, fn -> TableCache.prewarm(cache, "docs", indexes: names) end
+    end
+
+    assert_raise ArgumentError, fn -> TableCache.fetch(cache, "", timeout_ms: 1) end
+    assert_raise ArgumentError, fn -> TableCache.fetch(cache, "docs", timeout_ms: 0) end
+
+    assert_raise ArgumentError, fn ->
+      TableCache.prewarm(cache, "docs", indexes: [:words], unknown: true)
+    end
+
+    assert :sys.get_state(cache).conn == nil
+  end
+
+  test "held S3 index reads leave cache lookup and ordinary queries available", %{path: path} do
+    {fixture, options} = object_store(path)
+    remote = cache("s3://probe", storage_options: options)
+    {:ok, table} = TableCache.fetch(remote, "docs")
+    :ok = LanceDB.ObjectStoreFixture.hold(fixture, :indexes)
+    {:ok, :scheduled} = TableCache.prewarm(remote, "docs", indexes: [:words, :titles])
+    assert_receive {^fixture, :blocked, _key}, 2_000
+    assert {:ok, ^table} = TableCache.fetch(remote, "docs")
+    assert {:ok, [%{"id" => 1}]} = Query.query(table, filter: "id = 1", columns: [:id])
+    :ok = LanceDB.ObjectStoreFixture.release(fixture)
+    await_warmed(remote, "docs", ["words", "titles"])
+  end
+
+  test "first S3 query after warming reuses retained index contents", %{path: path} do
+    {fixture, options} = object_store(path)
+
+    remote =
+      cache("s3://probe", storage_options: options, index_cache_size_bytes: 16 * 1024 * 1024)
+
+    {:ok, :scheduled} = TableCache.prewarm(remote, "docs", indexes: [:words, :titles])
+    await_warmed(remote, "docs", ["words", "titles"])
+    {:ok, table} = TableCache.fetch(remote, "docs")
+    before = LanceDB.ObjectStoreFixture.requests(fixture)
+    query = [text_column: :text, filter: "id = 42", columns: [:id]]
+    assert {:ok, warmed_rows} = Query.full_text_search(table, "document", query)
+    warm_reads = LanceDB.ObjectStoreFixture.requests(fixture) |> Enum.drop(length(before))
+
+    {:ok, conn} =
+      Connection.connect("s3://probe", options,
+        index_cache_size_bytes: 16 * 1024 * 1024,
+        read_consistency_interval_ms: 0
+      )
+
+    {:ok, cold} = Connection.open_table(conn, "docs")
+    before = LanceDB.ObjectStoreFixture.requests(fixture)
+    assert {:ok, ^warmed_rows} = Query.full_text_search(cold, "document", query)
+    cold_reads = LanceDB.ObjectStoreFixture.requests(fixture) |> Enum.drop(length(before))
+    assert index_reads(cold_reads) > 0
+    assert index_reads(warm_reads) < index_reads(cold_reads)
+  end
+
+  defp object_store(path) do
+    fixture = start_supervised!({LanceDB.ObjectStoreFixture, path})
+
+    options = %{
+      aws_region: "us-east-1",
+      aws_access_key_id: "fixture",
+      aws_secret_access_key: "fixture",
+      allow_http: true,
+      aws_virtual_hosted_style_request: false,
+      aws_endpoint: "http://127.0.0.1:#{LanceDB.ObjectStoreFixture.port(fixture)}"
+    }
+
+    {fixture, options}
+  end
+
+  defp index_reads(requests),
+    do:
+      Enum.count(requests, fn {method, key} ->
+        method == :GET and String.contains?(key, "/_indices/")
+      end)
+
+  defp cache(path, opts \\ []) do
+    opts = Keyword.merge([uri: path, read_consistency_interval_ms: 0], opts)
+    start_supervised!(Supervisor.child_spec({TableCache, opts}, id: make_ref()))
+  end
+
+  defp await_warmed(cache, name, indexes) do
+    LanceDB.TestSupport.assert_eventually(
+      fn ->
+        case TableCache.status(cache, name) do
+          {:ok, statuses} ->
+            Enum.all?(indexes, &match?(%Warming{status: :completed}, statuses[&1]))
+
+          _ ->
+            false
+        end
+      end,
+      5_000
+    )
+  end
+
+  defp block(cache, operation, table_name) do
+    id = :sys.get_state(cache).cache_id
+
+    attach(&__MODULE__.gate/4, %{
+      owner: self(),
+      cache_id: id,
+      operation: operation,
+      table_name: table_name
+    })
+  end
+
+  defp block_operation(operation),
+    do:
+      attach(&__MODULE__.gate/4, %{
+        owner: self(),
+        cache_id: :any,
+        operation: operation,
+        table_name: :any
+      })
+
+  defp watch(cache) do
+    id = :sys.get_state(cache).cache_id
+    handler = make_ref()
+
+    :ok =
+      :telemetry.attach_many(
+        handler,
+        [[:lancedb, :operation, :start], [:lancedb, :table_cache, :warm]],
+        &__MODULE__.observe/4,
+        %{owner: self(), cache_id: id}
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+  end
+
+  defp attach(fun, context) do
+    handler = make_ref()
+    :ok = :telemetry.attach(handler, [:lancedb, :operation, :start], fun, context)
+    on_exit(fn -> :telemetry.detach(handler) end)
+    handler
+  end
+
+  def gate(_event, _measurements, metadata, context) do
+    if metadata.operation == context.operation and
+         (context.cache_id == :any or metadata[:cache_id] == context.cache_id) and
+         (context.table_name == :any or metadata[:table_name] == context.table_name) do
+      send(context.owner, {:blocked, self()})
+
+      receive do
+        :continue -> :ok
+      after
+        10_000 -> raise "cache test worker was not released"
+      end
+    end
+  end
+
+  def observe(event, measurements, metadata, context) do
+    if metadata[:cache_id] == context.cache_id or metadata[:operation] == :prewarm_index,
+      do: send(context.owner, {:observed, event, measurements, metadata})
+  end
+end

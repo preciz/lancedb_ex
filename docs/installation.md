@@ -47,7 +47,9 @@ mix deps.get
 mix compile
 ```
 
-A URL override and a supervision tree entry are not necessary.
+A URL override is not necessary. Direct database operations need no supervision
+tree entry. Applications using the optional [table cache](table-cache.md)
+supervise that component themselves.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
 default artifact URL. The Elixir package version is `0.1.1`, and the package

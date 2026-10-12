@@ -21,6 +21,8 @@ boundaries when you change the code:
 | `Query.Executor` | Use the same Arrow cursor for immediate and streaming reads. Keep callbacks in BEAM. |
 | `Creation`, `Write`, `SchemaEvolution`, and `Ingestion` | Share source consumption, row and batch transport, and writer cleanup. |
 | `Schema`, `ArrowSchema`, and native `StorageSchema` | Separate logical definitions, physical output, and checks for stored fields. |
+| `TableCache` | Retain handles, coalesce requests, enforce capacities, and discard stale task results. |
+| `TableCache.Options` and `TableCache.Worker` | Validate fixed instance settings and perform connection, open, and warming work outside the coordinator. |
 | Native `outcome.rs` and `wire.rs` | Define engine results and encode them for BEAM. |
 | Native compatibility modules | Keep SDK workarounds separate from the public API. |
 
@@ -39,8 +41,23 @@ allocate memory. Native batch transfer avoids row conversion.
 
 Each snapshot needs a separate SDK table and dataset view. An `Arc` or SDK
 table clone shares its view. The shared Tokio runtime executes native
-operations. The package creates no process for each table and uses no
-connection pool.
+operations. Direct APIs create no process for each table and use no
+connection pool. An optional application-supervised `TableCache` owns one
+coordinator and a linked task supervisor. Its bounded tasks perform storage
+work; returned handles go directly to the ordinary query APIs.
+
+Each cache entry has a fresh generation reference. Task results apply only to
+the matching generation, so invalidation and eviction cannot be undone by a
+late open or warmer. Active work remains counted until it settles, even if its
+entry is discarded. Caller monitors and fetch timeouts remove waiters without
+cancelling a shared open. Pending fetches protect their entries from eviction.
+
+Warming pins an independent snapshot sharing the retained handle's session.
+The completion key combines the table version and the SDK's first index segment
+UUID. A first-segment UUID alone misses appended index segments; the SDK's
+`index_version` describes its storage format. Rechecking the live version after
+warming rejects observed concurrent changes. Detection follows the configured
+read-consistency interval. No completion record promises cache residency.
 
 Connect and table open use a monitored one-shot Tokio task. Read admission
 happens before spawning; one deadline covers connection/session setup and the

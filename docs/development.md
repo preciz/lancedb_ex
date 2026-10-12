@@ -70,6 +70,11 @@ available for other work. Storage scheduler tests use one dirty CPU scheduler
 and verify that held history, branch, table and index metadata I/O, prewarming,
 listing, and deletion do not delay Arrow conversion. The table URI accessor is
 checked to complete without a storage request.
+Table-cache regressions gate background workers and S3 index reads to check
+coalescing, bounded concurrency, caller cleanup, LRU/idle eviction, retry, and
+invalidation during active work. They check index replacement and appended
+segments, shared session counters, and fewer first-query S3 index reads after
+warming than with an independent cold session.
 Connect/open scheduler tests hold both S3 reads and local SDK region-resolution
 requests. They check deadlines and caller death with one dirty CPU and one
 dirty I/O scheduler, including admission release before storage is released.

@@ -117,6 +117,11 @@ argument to `connect/3`. Table opening accepts its own deadline and per-open
 cache budgets. See [table-open controls](tables.md#table-open-controls-and-listing)
 for options, cancellation limits, and `Table.cache_stats/1`.
 
+For application-supervised handle retention and shared background index
+warming, use `LanceDB.TableCache`. Its returned handles work with the usual
+table and query APIs. See [table caching](table-cache.md) for configuration,
+status, eviction and explicit invalidation.
+
 ## Records and search
 
 Records use maps with atom or string keys. To create a table without an
@@ -177,6 +182,12 @@ public calls from callbacks get independent execution IDs. Convenience
 methods enter their canonical span once. Successful events do not include
 records, SQL, credentials, or table handles. Exception metadata can contain
 user data in reasons or stacktraces.
+
+The optional table cache emits operation spans for `cache_fetch`,
+`cache_prewarm`, `cache_status`, and its `cache_connect`, `cache_open`, and
+`cache_warm` workers. Worker metadata includes `cache_id`, `table_name`,
+`generation`, and `index_names`. It also emits per-index completion/failure and
+entry eviction events; see [cache telemetry](table-cache.md#telemetry).
 
 For the current source's per-session index and metadata cache counters, use
 `LanceDB.Table.cache_stats/1`. It requires no metrics recorder and reports the

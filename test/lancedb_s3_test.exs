@@ -78,6 +78,65 @@ defmodule LanceDB.S3Test do
     assert {:ok, 0} = Table.count_rows(override)
   end
 
+  test "supervised cache retains shared FTS warming on object storage", %{
+    conn: conn,
+    uri: uri,
+    options: options
+  } do
+    alias LanceDB.{Connection, Index, Query, Table, TableCache}
+    alias LanceDB.TableCache.Warming
+
+    rows = for id <- 1..100, do: %{id: id, text: "document #{id}", title: "title #{id}"}
+    {:ok, source} = Connection.create_table(conn, "documents", rows)
+    {:ok, :created} = Index.create(source, :text, type: :fts, name: "words")
+    {:ok, :created} = Index.create(source, :title, type: :fts, name: "titles")
+
+    cache =
+      start_supervised!(
+        {TableCache,
+         uri: uri,
+         storage_options: options,
+         index_cache_size_bytes: 16 * 1024 * 1024,
+         read_consistency_interval_ms: 0}
+      )
+
+    {:ok, :scheduled} = TableCache.prewarm(cache, "documents", indexes: [:words, :titles])
+
+    LanceDB.TestSupport.assert_eventually(
+      fn ->
+        match?(
+          {:ok,
+           %{
+             "words" => %Warming{status: :completed},
+             "titles" => %Warming{status: :completed}
+           }},
+          TableCache.status(cache, "documents")
+        )
+      end,
+      10_000
+    )
+
+    {:ok, table} = TableCache.fetch(cache, "documents")
+    {:ok, before_query} = Table.cache_stats(table)
+    assert before_query["index"]["num_entries"] > 0
+
+    assert {:ok, [%{"id" => 42}]} =
+             Query.full_text_search(table, "document",
+               text_column: :text,
+               filter: "id = 42",
+               columns: [:id]
+             )
+
+    {:ok, after_query} = Table.cache_stats(table)
+    assert after_query["index"]["hits"] > before_query["index"]["hits"]
+    {:ok, _} = Table.add(source, [%{id: 101, text: "document 101", title: "title 101"}])
+    assert {:ok, 101} = Table.count_rows(table)
+    :ok = TableCache.invalidate(cache, "documents")
+    assert {:ok, fresh} = TableCache.fetch(cache, "documents")
+    assert fresh != table
+    assert {:ok, 101} = Table.count_rows(fresh)
+  end
+
   test("blob ranges, creation overrides and advanced FTS persist on object storage", %{
     conn: conn,
     uri: uri,

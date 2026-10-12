@@ -40,8 +40,8 @@ mix compile
 ```
 
 Mix downloads the native archive and checks the committed checksum. The
-package supplies a default artifact URL. A URL override and a supervision
-tree entry are not necessary.
+package supplies a default artifact URL. Direct database operations need no
+supervision tree entry. The optional table cache is application-supervised.
 
 Normal installation does not compile Rust or create checksums. Missing
 configuration, unsupported platforms, download failures, and incorrect
@@ -88,6 +88,35 @@ budgets on the initial connection, and `Table.cache_stats/1`. See
 [table-open controls and cache statistics](docs/tables.md#table-open-controls-and-listing)
 for session sharing, option ranges, and examples.
 
+## Supervised table caching
+
+The current source includes an optional cache for applications that retain
+handles and warm indexes in the background. Add it to your supervision tree:
+
+```elixir
+{LanceDB.TableCache,
+ name: MyApp.TableCache,
+ uri: "./data/vectors",
+ max_tables: 64,
+ index_cache_size_bytes: 112 * 1024 * 1024,
+ metadata_cache_size_bytes: 16 * 1024 * 1024,
+ read_consistency_interval_ms: 0}
+```
+
+```elixir
+{:ok, :scheduled} =
+  LanceDB.TableCache.prewarm(MyApp.TableCache, "documents", indexes: ["text_idx"])
+
+{:ok, table} = LanceDB.TableCache.fetch(MyApp.TableCache, "documents")
+{:ok, rows} = LanceDB.Query.full_text_search(table, "Elixir")
+```
+
+The application creates tables and indexes and decides when to warm them.
+The cache shares concurrent opens and index warming, retains one session,
+and limits handles and background work. Fetches and queries can proceed during
+warming. See [table caching](docs/table-cache.md) for status, invalidation,
+capacity controls and consistency guarantees.
+
 ## Documentation
 
 | Guide | Contents |
@@ -99,6 +128,7 @@ for session sharing, option ranges, and examples.
 | [Schemas and data types](docs/schema.md) | Explicit schemas, nested values, blobs, timestamps, schema changes, and metadata. |
 | [Indexes](docs/indexes.md) | Index types, training, search tuning, readiness, and native jobs. |
 | [Table operations](docs/tables.md) | Statistics, history, tags, branches, clones, table options, and maintenance. |
+| [Table caching](docs/table-cache.md) | Optional supervision, shared handles, background warming, limits, and invalidation. |
 | [Installation and storage](docs/installation.md) | Native artifacts, authentication, deployment, offline builds, and S3 configuration. |
 | [Development and tests](docs/development.md) | Local checks, StreamData properties, coverage, and MinIO tests. |
 | [Native builds](docs/native-builds.md) | Explicit source builds, immutable artifacts, publication, and consumer checks. |

@@ -11,7 +11,8 @@ defmodule LanceDB.Execution do
   and cancel on caller death. Their storage waits run on Tokio and retain no
   BEAM scheduler. Cursor owner death cancels reads. Writer owner death errors
   input and awaits the native result; cancellation never promises rollback after
-  final commit has begun. No table process or connection pool is created.
+  final commit has begun. Direct operations create no table process or connection
+  pool. `LanceDB.TableCache` provides optional application-supervised retention.
   """
   @type write_input(value) :: {:ok, value} | {:error, LanceDB.Error.reason()}
   @doc "Sets positive read and write concurrency limits across the BEAM VM. Omitted limits revert to their defaults, 64 reads and 16 writes."

@@ -39,6 +39,7 @@ defmodule LanceDB.Index do
   Loads an existing index into the index cache, returning after prewarming completes.
   Useful before the first search after opening a table. Does not build or update
   indexes; cached pages can later be evicted. Missing indexes return an error.
+  For shared background warming, use `LanceDB.TableCache.prewarm/3`.
   """
   @spec prewarm(table(), atom() | String.t()) :: result(:prewarmed)
   def prewarm(table, name) do

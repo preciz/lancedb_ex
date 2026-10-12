@@ -17,10 +17,11 @@ defmodule LanceDB.ObjectStoreFixture do
 
   def port(server), do: GenServer.call(server, :port)
 
-  def hold(server, requests \\ :objects) when requests in [:objects, :all],
+  def hold(server, requests \\ :objects) when requests in [:objects, :all, :indexes],
     do: GenServer.call(server, {:hold, self(), requests})
 
   def release(server), do: GenServer.call(server, :release)
+  def requests(server), do: GenServer.call(server, :requests)
 
   @impl true
   def init(objects) do
@@ -32,11 +33,20 @@ defmodule LanceDB.ObjectStoreFixture do
     acceptor = spawn_link(fn -> accept(socket, server) end)
 
     {:ok,
-     %{objects: objects, port: port, acceptor: acceptor, owner: nil, requests: :objects, held: []}}
+     %{
+       objects: objects,
+       port: port,
+       acceptor: acceptor,
+       owner: nil,
+       requests: :objects,
+       held: [],
+       observations: []
+     }}
   end
 
   @impl true
   def handle_call(:port, _from, state), do: {:reply, state.port, state}
+  def handle_call(:requests, _from, state), do: {:reply, Enum.reverse(state.observations), state}
 
   def handle_call({:hold, owner, requests}, _from, state),
     do: {:reply, :ok, %{state | owner: owner, requests: requests}}
@@ -52,6 +62,7 @@ defmodule LanceDB.ObjectStoreFixture do
     key = uri.path |> URI.decode() |> String.replace_prefix("/probe/", "")
 
     response = response(state.objects, key, query, headers)
+    state = %{state | observations: [{method, key} | state.observations]}
 
     if not is_nil(state.owner) and hold_request?(state.requests, method, key, state.objects) do
       reference = make_ref()
@@ -69,6 +80,9 @@ defmodule LanceDB.ObjectStoreFixture do
   end
 
   defp hold_request?(:all, _method, _key, _objects), do: true
+
+  defp hold_request?(:indexes, method, key, _objects),
+    do: method == :GET and String.contains?(key, "/_indices/")
 
   defp hold_request?(:objects, method, key, objects),
     do: method == :GET and Map.has_key?(objects, key)
