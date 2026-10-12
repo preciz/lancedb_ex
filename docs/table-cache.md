@@ -32,6 +32,11 @@ one connection and SDK session with fixed storage, cache and consistency setting
 Use separate named instances for incompatible settings. Each BEAM node owns its
 own instance. There is no distributed coordination or automatic index creation.
 
+Unnamed instances receive distinct supervisor child IDs, so several can share
+one supervisor. Their public calls accept the cache PID. To assign a stable
+child ID independently of process registration, use
+`Supervisor.child_spec({LanceDB.TableCache, uri: uri}, id: :document_cache)`.
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `uri` | Required | Database location. |

@@ -10,6 +10,8 @@ defmodule LanceDB.TableCache do
   Options:
 
     * `:uri` (required), `:storage_options` (default `%{}`), and optional `:name`.
+      Unnamed instances receive distinct supervisor child IDs. Use
+      `Supervisor.child_spec/2` to supply a stable application-specific ID.
     * `:index_cache_size_bytes`, `:metadata_cache_size_bytes`, and
       `:read_consistency_interval_ms` follow `LanceDB.Connection.connect/3`.
     * `:connect_timeout_ms` and `:open_timeout_ms` default to 5_000; nil disables
@@ -51,8 +53,15 @@ defmodule LanceDB.TableCache do
 
   @doc false
   @spec child_spec(keyword()) :: Supervisor.child_spec()
-  def child_spec(opts),
-    do: %{id: Keyword.get(opts, :name, __MODULE__), start: {__MODULE__, :start_link, [opts]}}
+  def child_spec(opts) do
+    id =
+      case Keyword.get(opts, :name) do
+        nil -> make_ref()
+        name -> name
+      end
+
+    %{id: id, start: {__MODULE__, :start_link, [opts]}}
+  end
 
   @doc """
   Returns the retained handle, sharing concurrent opens for the same name.

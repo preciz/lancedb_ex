@@ -398,6 +398,33 @@ defmodule LanceDB.TableCacheTest do
     assert_receive {:DOWN, ^monitor, :process, ^supervisor, _}, 2_000
   end
 
+  test "multiple unnamed children have distinct IDs that survive restarts", %{path: path} do
+    children =
+      for opts <- [[uri: path], [uri: path], [uri: path, name: nil], [uri: path, name: nil]],
+          do: {TableCache, opts}
+
+    supervisor =
+      start_supervised!(%{
+        id: make_ref(),
+        start: {Supervisor, :start_link, [children, [strategy: :one_for_one]]},
+        type: :supervisor
+      })
+
+    caches = Supervisor.which_children(supervisor)
+    assert length(caches) == 4
+    assert length(Enum.uniq_by(caches, &elem(&1, 0))) == 4
+
+    for {_id, pid, :worker, _modules} <- caches do
+      assert {:ok, _} = TableCache.fetch(pid, "docs")
+    end
+
+    {id, previous, :worker, _modules} = hd(caches)
+    assert :ok = Supervisor.terminate_child(supervisor, id)
+    assert {:ok, replacement} = Supervisor.restart_child(supervisor, id)
+    assert replacement != previous
+    assert {:ok, _} = TableCache.fetch(replacement, "docs")
+  end
+
   test "validates configuration and requests before touching storage", %{path: path} do
     for opts <- [
           [uri: nil],
