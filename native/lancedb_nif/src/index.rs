@@ -171,7 +171,7 @@ fn create_index_async(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn list_indices(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -189,7 +189,7 @@ fn list_indices(table_res: ResourceArc<TableResource>) -> Result<String, Failure
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn index_stats(table_res: ResourceArc<TableResource>, name: String) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;
@@ -229,7 +229,7 @@ fn index_stats(table_res: ResourceArc<TableResource>, name: String) -> Result<St
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn drop_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::write()?;
@@ -242,7 +242,7 @@ fn drop_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Ato
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn prewarm_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;

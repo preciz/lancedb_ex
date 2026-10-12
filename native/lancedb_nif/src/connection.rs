@@ -43,7 +43,7 @@ fn connect(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn table_names(
     conn_res: ResourceArc<ConnectionResource>,
     start_after: Option<String>,
@@ -68,7 +68,7 @@ fn table_names(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn drop_table(conn_res: ResourceArc<ConnectionResource>, name: String) -> Result<Atom, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::write()?;

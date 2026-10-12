@@ -25,10 +25,10 @@ defmodule LanceDB.SchedulerTest do
   end
 
   @tag timeout: 45_000
-  test "held history and branch storage leaves dirty CPU work available", %{path: path} do
+  test "held storage leaves dirty CPU work available", %{path: path} do
     {output, status} = run_fixture("metadata_schedulers.ex", path, 1, 2)
     assert status == 0, output
-    assert output =~ "history and branch storage leaves dirty CPU work available"
+    assert output =~ "held storage leaves dirty CPU work available"
   end
 
   defp run_fixture(fixture, path, cpu_schedulers \\ 2, io_schedulers \\ 1) do

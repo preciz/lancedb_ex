@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Move blocking table/index inspection, index prewarming and deletion, and table
+  listing/deletion to dirty I/O schedulers so storage waits leave dirty CPU
+  schedulers available. Requires a new native build for precompiled installations.
+
 ## 0.1.1
 
 - Add `LanceDB.Table.cache_stats/1` for the handle's actual session: index and

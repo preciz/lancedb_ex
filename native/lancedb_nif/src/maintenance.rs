@@ -2,7 +2,7 @@ use crate::error::Failure;
 use crate::resources::{atoms, TableResource, RUNTIME};
 use rustler::{Atom, ResourceArc};
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif(schedule = "DirtyIo")]
 fn table_stats(table: ResourceArc<TableResource>) -> Result<String, Failure> {
     RUNTIME.block_on(async {
         let _permit = crate::execution::Permit::read()?;

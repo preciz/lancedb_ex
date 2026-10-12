@@ -49,6 +49,12 @@ API without retaining a BEAM scheduler. Timeout, caller death, and caught task
 panics drop the operation future and release its permit before replying. SDK
 tasks spawned separately can outlive that future.
 
+Blocking table/index inspection, index prewarming and deletion, and table
+listing/deletion use dirty I/O schedulers. Their storage waits retain an I/O
+thread while leaving dirty CPU schedulers available for Arrow conversion.
+The embedded table URI accessor only copies an in-memory string. CPU-heavy
+operations such as index construction and row codecs use dirty CPU schedulers.
+
 Read cancellation and write completion have different guarantees. Explicit
 cursor close waits for cleanup and read slot release. A writer abort sends
 an input error and waits for SDK execution. Dropping a write future can

@@ -66,8 +66,10 @@ nesting to 64 levels, including the outer row list and row map. Cursor and job
 scheduler tests run a separate BEAM with one dirty I/O scheduler and hold storage
 responses in a local read-only S3 fixture. Pending cursor reads, cleanup,
 and native job waits use Tokio and reply by message. BEAM schedulers stay
-available for other work. History and branch scheduler tests use one dirty CPU
-scheduler and verify that held metadata I/O does not delay Arrow conversion.
+available for other work. Storage scheduler tests use one dirty CPU scheduler
+and verify that held history, branch, table and index metadata I/O, prewarming,
+listing, and deletion do not delay Arrow conversion. The table URI accessor is
+checked to complete without a storage request.
 Connect/open scheduler tests hold both S3 reads and local SDK region-resolution
 requests. They check deadlines and caller death with one dirty CPU and one
 dirty I/O scheduler, including admission release before storage is released.
