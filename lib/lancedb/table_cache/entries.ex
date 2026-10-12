@@ -21,12 +21,38 @@ defmodule LanceDB.TableCache.Entries do
   def admit(entries, extra, max_requests) do
     used =
       Enum.reduce(entries, 0, fn {_name, entry}, count ->
-        count + map_size(entry.waiters) + map_size(entry.warming)
+        count + map_size(entry.waiters) +
+          Enum.count(entry.warming, fn {_name, warm} -> warm.status in [:queued, :running] end)
       end)
 
     if used + extra <= max_requests,
       do: :ok,
       else: {:error, busy("Table cache request capacity reached")}
+  end
+
+  @spec trim_warming(t(), pos_integer()) :: t()
+  def trim_warming(entries, max_records) do
+    retained =
+      Enum.reduce(entries, 0, fn {_name, entry}, count -> count + map_size(entry.warming) end)
+
+    excess = retained - max_records
+
+    if excess > 0 do
+      finished =
+        for {name, entry} <- entries,
+            {index, warm} <- entry.warming,
+            warm.status in [:completed, :failed],
+            do: {entry.order, name, index}
+
+      finished
+      |> Enum.sort()
+      |> Enum.take(excess)
+      |> Enum.reduce(entries, fn {_order, name, index}, entries ->
+        update_in(entries, [name, :warming], &Map.delete(&1, index))
+      end)
+    else
+      entries
+    end
   end
 
   @spec reserve(t(), String.t(), pos_integer(), non_neg_integer(), integer()) ::

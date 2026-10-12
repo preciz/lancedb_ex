@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Give unnamed table caches distinct supervisor child IDs.
+- Count pending requests separately from finished warming records, retain bounded
+  status history, and evaluate admission after prospective eviction without
+  discarding entries on rejection.
 - Document that each stream cursor belongs to the process that begins enumeration.
 - Complete message-based native waits for storage reads and writes, query
   planning and counts, blobs, index operations, maintenance, and writer

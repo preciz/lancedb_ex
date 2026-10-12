@@ -1,10 +1,11 @@
 defmodule LanceDB.TableCache.Warming do
   @moduledoc """
-  The last observed warming attempt for an index retained by `LanceDB.TableCache`.
+  A recent warming attempt for an index retained by `LanceDB.TableCache`.
   `:completed` records successful prewarming for `version` and `index_uuid`;
   it does not promise that cache pages remain resident. Identity fields describe
   the last successful attempt while another request is queued or running.
   Failed attempts contain a `LanceDB.Error` and clear the completed identity.
+  Finished records may be discarded to make room for new warming requests.
   """
   defstruct status: :queued, version: nil, index_uuid: nil, duration_ms: nil, error: nil
 

@@ -49,7 +49,7 @@ child ID independently of process registration, use
 | `idle_timeout_ms` | `3_600_000` | Expire entries idle since fetch/prewarm; `nil` disables expiry. |
 | `max_opens` | `4` | Concurrent table opens. |
 | `max_warmers` | `2` | Concurrent table warming tasks. |
-| `max_requests` | `256` | Waiting fetch callers plus remembered per-index warming records. |
+| `max_requests` | `256` | Waiting fetch callers plus queued/running index requests; also bounds total retained warming records. |
 
 Limits and non-nil idle intervals must be positive uint32 integers. Cache budgets,
 consistency intervals and native deadlines have the same ranges as
@@ -133,11 +133,19 @@ Idle expiry runs periodically and on fetch, prewarm and status calls. Queries on
 returned handles do not refresh cache activity. Status inspection also does not
 keep an entry alive. Warming alone does not protect an entry from eviction.
 
-`max_requests` includes completed and failed index records, so both pending work
-and remembered status stay bounded. Invalidation and eviction discard records.
-Saturation returns `:busy`. Already-retained handles remain fetchable without
-adding a waiting request. Invalidated/evicted workers count toward concurrency
-limits until they settle; repeated invalidation cannot create unbounded work.
+`max_requests` bounds waiting fetch callers plus queued/running index requests.
+Completed and failed attempts release request capacity. Request admission is
+checked against the prospective entries after any capacity eviction; rejected
+requests leave existing entries and their status intact. Saturation returns
+`:busy`. Already-retained handles remain fetchable without adding a waiter.
+
+Total retained warming records are independently bounded by the same limit.
+New warming requests can discard completed/failed records, starting with the
+least recently fetched/prewarmed tables. Queued/running records are protected.
+Discarded records disappear from `status/2`; warming that index again can repeat
+native work. Invalidation and eviction also discard records.
+Invalidated/evicted workers count toward `max_opens` and `max_warmers` until they
+settle; repeated invalidation cannot create unbounded running work.
 
 Native prewarming has no deadline and cannot be forcibly interrupted by killing
 an Elixir task. An abandoned attempt can still populate its shared session.

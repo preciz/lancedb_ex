@@ -23,9 +23,11 @@ defmodule LanceDB.TableCache do
       since fetch/prewarm requests. Queries on returned handles are not observed.
     * `:max_opens` (default 4), `:max_warmers` (default 2) bound concurrent work.
       One warmer processes a table's requested indexes sequentially.
-    * `:max_requests` (default 256) bounds waiting fetch callers plus remembered
-      index warming records across the instance, including completed/failed ones.
-      Invalidation and eviction discard these records. Saturation returns `:busy`.
+    * `:max_requests` (default 256) bounds waiting fetch callers plus queued/running
+      index warming requests. Saturation returns `:busy`. Finished records do not
+      consume request capacity. Total retained warming records are also bounded
+      by this limit; completed/failed records are discarded as needed to admit
+      new warming requests. Discarded records can cause subsequent warming to repeat.
 
   Limits and idle intervals are positive uint32 integers. Native memory is
   controlled separately by session cache budgets. Eviction releases this
@@ -159,23 +161,30 @@ defmodule LanceDB.TableCache do
   def handle_call({:prewarm, name, names}, _from, state) do
     state = expire(state)
     previous = get_in(state, [:entries, name, :warming]) || %{}
-    extra = Enum.count(names, &(not Map.has_key?(previous, &1)))
 
-    with :ok <- Entries.admit(state.entries, extra, state.options.max_requests),
-         {:ok, state} <- reserve(state, name) do
-      entry = state.entries[name]
+    extra =
+      Enum.count(names, fn name ->
+        not match?(%Warming{status: status} when status in [:queued, :running], previous[name])
+      end)
 
-      warming = Enum.reduce(names, entry.warming, &enqueue_index/2)
+    case reserve(state, name, extra) do
+      {:ok, state} ->
+        entry = state.entries[name]
 
-      entry = %{
-        entry
-        | warming: warming,
-          opening: if(entry.table == nil, do: entry.opening || :queued, else: nil)
-      }
+        warming = Enum.reduce(names, entry.warming, &enqueue_index/2)
 
-      {:reply, {:ok, :scheduled}, state |> put_entry(name, entry) |> dispatch()}
-    else
-      {:error, error} -> {:reply, {:error, error}, state}
+        entry = %{
+          entry
+          | warming: warming,
+            opening: if(entry.table == nil, do: entry.opening || :queued, else: nil)
+        }
+
+        state = put_entry(state, name, entry)
+        entries = Entries.trim_warming(state.entries, state.options.max_requests)
+        {:reply, {:ok, :scheduled}, dispatch(%{state | entries: entries})}
+
+      {:error, error} ->
+        {:reply, {:error, error}, state}
     end
   end
 
@@ -243,20 +252,21 @@ defmodule LanceDB.TableCache do
   end
 
   defp fetch_pending(state, name, request, from) do
-    with :ok <- Entries.admit(state.entries, 1, state.options.max_requests),
-         {:ok, updated} <- reserve(state, name) do
-      entry = updated.entries[name]
-      monitor = Process.monitor(elem(from, 0))
+    case reserve(state, name, 1) do
+      {:ok, updated} ->
+        entry = updated.entries[name]
+        monitor = Process.monitor(elem(from, 0))
 
-      entry = %{
-        entry
-        | opening: entry.opening || :queued,
-          waiters: Map.put(entry.waiters, request, {from, monitor})
-      }
+        entry = %{
+          entry
+          | opening: entry.opening || :queued,
+            waiters: Map.put(entry.waiters, request, {from, monitor})
+        }
 
-      {:noreply, updated |> put_entry(name, entry) |> dispatch()}
-    else
-      {:error, error} -> {:reply, {:error, error}, state}
+        {:noreply, updated |> put_entry(name, entry) |> dispatch()}
+
+      {:error, error} ->
+        {:reply, {:error, error}, state}
     end
   end
 
@@ -275,9 +285,11 @@ defmodule LanceDB.TableCache do
     end
   end
 
-  defp reserve(state, name) do
+  defp reserve(state, name, extra) do
     with {:ok, entries, tick, discarded} <-
-           Entries.reserve(state.entries, name, state.options.max_tables, state.tick, now()) do
+           Entries.reserve(state.entries, name, state.options.max_tables, state.tick, now()),
+         :ok <- Entries.admit(entries, extra, state.options.max_requests) do
+      # Apply eviction effects only after the prospective entry set is admitted.
       discard_entry(state, discarded, :capacity)
       {:ok, %{state | entries: entries, tick: tick}}
     end

@@ -290,7 +290,7 @@ defmodule LanceDB.TableCacheTest do
     await_warmed(cache, "docs", ["words"])
   end
 
-  test "warming concurrency and remembered records stay bounded", %{path: path, conn: conn} do
+  test "warming concurrency and pending requests stay bounded", %{path: path, conn: conn} do
     {:ok, other} = Connection.open_table(conn, "other")
     {:ok, :created} = Index.create(other, :text, type: :fts, name: "words")
     cache = cache(path, max_warmers: 1, max_requests: 2)
@@ -308,6 +308,100 @@ defmodule LanceDB.TableCacheTest do
     assert :ok = TableCache.invalidate(cache, "other")
     assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:titles])
     await_warmed(cache, "docs", ["titles"])
+  end
+
+  test "finished warming releases request capacity while status history stays bounded", %{
+    path: path
+  } do
+    cache = cache(path, max_requests: 1)
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    assert {:ok, _} = TableCache.fetch(cache, "other")
+    assert {:ok, %{"words" => %Warming{status: :completed}}} = TableCache.status(cache, "docs")
+
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:titles])
+    await_warmed(cache, "docs", ["titles"])
+
+    assert {:ok, %{"titles" => %Warming{status: :completed}} = statuses} =
+             TableCache.status(cache, "docs")
+
+    assert map_size(statuses) == 1
+
+    for name <- ["missing-one", "missing-two"] do
+      assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [name])
+
+      assert_eventually(fn ->
+        match?({:ok, %{^name => %Warming{status: :failed}}}, TableCache.status(cache, "docs"))
+      end)
+
+      assert {:ok, statuses} = TableCache.status(cache, "docs")
+      assert Map.keys(statuses) == [name]
+      assert {:ok, _} = TableCache.fetch(cache, "third")
+    end
+  end
+
+  test "status pruning protects running and queued requests and their shared work", %{path: path} do
+    cache = cache(path, max_requests: 2, max_warmers: 1)
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    handler = block(cache, :cache_warm, "docs")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:titles])
+    assert_receive {:blocked, worker}, 2_000
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "other", indexes: [:missing])
+
+    assert {:ok, %{"titles" => %Warming{status: :running}} = running} =
+             TableCache.status(cache, "docs")
+
+    assert map_size(running) == 1
+    assert {:ok, %{"missing" => %Warming{status: :queued}}} = TableCache.status(cache, "other")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:titles])
+    assert {:error, %Error{kind: :busy}} = TableCache.prewarm(cache, "third", indexes: [:missing])
+    refute_receive {:blocked, _}, 50
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    await_warmed(cache, "docs", ["titles"])
+
+    assert_eventually(fn ->
+      match?({:ok, %{"missing" => %Warming{status: :failed}}}, TableCache.status(cache, "other"))
+    end)
+  end
+
+  test "capacity eviction frees pending request capacity before admission", %{path: path} do
+    cache = cache(path, max_tables: 1, max_requests: 1)
+    handler = block(cache, :cache_warm, "docs")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert_receive {:blocked, worker}, 2_000
+
+    assert {:ok, other} = TableCache.fetch(cache, "other")
+    assert {:error, %Error{kind: :not_found}} = TableCache.status(cache, "docs")
+    assert map_size(:sys.get_state(cache).tasks) == 1
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).tasks) == 0 end)
+    assert {:ok, ^other} = TableCache.fetch(cache, "other")
+  end
+
+  test "rejected requests preserve evictable entries and retries consume pending capacity", %{
+    path: path
+  } do
+    cache = cache(path, max_tables: 2, max_requests: 1)
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    {:ok, original} = TableCache.fetch(cache, "docs")
+    handler = block(cache, :cache_open, "other")
+    pending = Task.async(fn -> TableCache.fetch(cache, "other") end)
+    assert_receive {:blocked, worker}, 2_000
+
+    assert {:error, %Error{kind: :busy}} = TableCache.fetch(cache, "third")
+    assert {:error, %Error{kind: :busy}} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert {:ok, ^original} = TableCache.fetch(cache, "docs")
+    assert {:ok, %{"words" => %Warming{status: :completed}}} = TableCache.status(cache, "docs")
+    refute Map.has_key?(:sys.get_state(cache).entries, "third")
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    assert {:ok, _} = Task.await(pending)
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
   end
 
   test "invalidation and eviction discard late warming results", %{path: path} do
