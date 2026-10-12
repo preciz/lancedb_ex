@@ -15,8 +15,8 @@ try do
 
   {:ok, table} =
     LanceDB.Connection.create_table(db, "items", [
-      %{id: 1, vector: [1.0, 0.0]},
-      %{id: 2, vector: [0.0, 1.0]}
+      %{id: 1, name: "Elixir", text: "Elixir and OTP", vector: [1.0, 0.0]},
+      %{id: 2, name: "Bread", text: "Sourdough bread", vector: [0.0, 1.0]}
     ])
 
   {:ok, 2} = LanceDB.Table.count_rows(table)
@@ -33,6 +33,71 @@ try do
   {:ok, [%{"id" => 1}]} = LanceDB.Query.search(table, [1.0, 0.0], limit: 1)
   IO.puts("Consumer NIF loaded; LanceDB write and vector query passed.")
   IO.puts("Connect/open deadlines, initial cache budgets and cache statistics passed.")
+
+  {:ok, :created} = LanceDB.Index.create(table, :name, type: :fts, name: "names_idx")
+  {:ok, :created} = LanceDB.Index.create(table, :text, type: :fts, name: "text_idx")
+  cache = LanceDB.ConsumerSmoke.TableCache
+  indexes = ["names_idx", "text_idx"]
+
+  {:ok, supervisor} =
+    Supervisor.start_link(
+      [
+        {LanceDB.TableCache,
+         name: cache,
+         uri: path,
+         index_cache_size_bytes: 16 * 1024 * 1024,
+         metadata_cache_size_bytes: 1024 * 1024,
+         read_consistency_interval_ms: 0}
+      ],
+      strategy: :one_for_one
+    )
+
+  try do
+    {:ok, :scheduled} = LanceDB.TableCache.prewarm(cache, "items", indexes: indexes)
+    {:ok, cached} = LanceDB.TableCache.fetch(cache, "items", timeout_ms: 10_000)
+    deadline = System.monotonic_time(:millisecond) + 10_000
+
+    Stream.repeatedly(fn ->
+      {:ok, statuses} = LanceDB.TableCache.status(cache, "items")
+      statuses
+    end)
+    |> Enum.find(fn statuses ->
+      for {_name, %LanceDB.TableCache.Warming{status: :failed, error: error}} <- statuses,
+          do: raise(error)
+
+      cond do
+        Enum.all?(indexes, &match?(%LanceDB.TableCache.Warming{status: :completed}, statuses[&1])) ->
+          true
+
+        System.monotonic_time(:millisecond) >= deadline ->
+          raise "Consumer index warming timed out: #{inspect(statuses)}"
+
+        true ->
+          Process.sleep(10)
+          false
+      end
+    end)
+
+    {:ok, ^cached} = LanceDB.TableCache.fetch(cache, "items")
+    {:ok, before_query} = LanceDB.Table.cache_stats(cached)
+    true = before_query["index"]["num_entries"] > 0
+
+    {:ok, [%{"id" => 1}]} =
+      LanceDB.Query.full_text_search(
+        cached,
+        LanceDB.FTS.multi_match("Elixir", [:name, :text]),
+        columns: [:id]
+      )
+
+    {:ok, after_query} = LanceDB.Table.cache_stats(cached)
+    true = after_query["index"]["hits"] > before_query["index"]["hits"]
+
+    IO.puts(
+      "Supervised table cache, background multi-index warming and shared-cache FTS query passed."
+    )
+  after
+    Supervisor.stop(supervisor)
+  end
 after
   File.rm_rf!(path)
 end

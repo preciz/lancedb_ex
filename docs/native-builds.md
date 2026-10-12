@@ -78,7 +78,13 @@ Its `PATH` contains neither GitHub CLI nor Rust tools. The consumer has no
 GitHub credentials. It downloads from the default URL, checks the checksum, and
 loads the NIF. It then connects with initial cache budgets and a deadline,
 writes a small table, reopens it with a deadline, inspects cache statistics,
-and executes a vector query.
+and executes a vector query. It creates two FTS indexes and starts an
+application supervisor with a named `TableCache` child. Background warming
+must complete for both indexes within ten seconds after fetch; failures stop
+the check immediately. Repeated fetching must return the retained handle, and
+the first multi-column FTS query must reuse its warmed session cache, verified
+by resident entries and increased index hits. The supervisor is stopped before
+the temporary database is removed.
 
 The checks include unsupported targets, unavailable downloads, incorrect
 checksums, and missing manifests. These failures must not start Rust. The
