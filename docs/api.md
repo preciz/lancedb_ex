@@ -11,8 +11,7 @@ and `Blob` for the other operations. `LanceDB.connect` calls
 
 The public API uses typed connection and table handles, reusable queries and
 schemas, and error and write result structs. These guides describe the current
-source; see [installation](installation.md#installation) for release status and
-[API migration](migration.md#api-migration) for changes from earlier checkouts.
+source; see [installation](installation.md#installation) for release status.
 
 ```elixir
 alias LanceDB.{Batch, Query, Schema, Table}

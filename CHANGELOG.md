@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Remove the obsolete pre-release migration guide and redundant table type aliases.
 - Move blocking table/index inspection, index prewarming and deletion, and table
   listing/deletion to dirty I/O schedulers so storage waits leave dirty CPU
   schedulers available. Requires a new native build for precompiled installations.

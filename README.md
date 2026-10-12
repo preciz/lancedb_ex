@@ -102,7 +102,6 @@ for session sharing, option ranges, and examples.
 | [Development and tests](docs/development.md) | Local checks, StreamData properties, coverage, and MinIO tests. |
 | [Native builds](docs/native-builds.md) | Explicit source builds, immutable artifacts, publication, and consumer checks. |
 | [Implementation notes](docs/internals.md) | Module responsibilities and SDK compatibility adapters. |
-| [Migration guide](docs/migration.md) | API changes from earlier checkouts. |
 | [Changelog](CHANGELOG.md) | Public release notes. |
 
 The source repository is [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex).
