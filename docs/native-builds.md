@@ -199,13 +199,49 @@ The consumer check above installs the actual unpacked Hex package, downloads
 its selected binary anonymously, and verifies a production application release.
 Review `CHANGELOG.md` and the generated documentation too.
 
-After all checks pass, tag the package source and publish to Hex:
+After all checks pass, tag and push the package source, then run the release
+script from that checkout:
 
 ```sh
 git tag -a v0.2.0 -m "Release v0.2.0"
 git push origin main v0.2.0
-env -u LANCEDB_BUILD mix hex.publish
+elixir scripts/release.exs
 ```
+
+The script requires Elixir, Mix with Hex, Git, `curl`, and an authenticated
+GitHub CLI (`gh auth login`). Install the development dependencies during the
+checks above so Hex can generate the documentation. Hex authentication and any
+password or OTP prompts remain interactive in your terminal.
+
+The script requires a clean working tree and matching local and GitHub tags at
+`HEAD`. It checks native freshness and waits for the tag's CI run to pass before
+publication. If tag CI has not appeared yet, wait and rerun the script.
+
+It checks that every file in the built package matches the Git tag, including
+rejecting ignored files accidentally selected for packaging. It publishes the
+package and docs to Hex, fetches the published package, and compares every source
+file with that local package.
+It verifies the documentation's version and source links and runs the fresh
+consumer and production-release checks against the published package. Finally,
+it creates a stable GitHub Release with the version's changelog, links to Hex and
+HexDocs, and breaking changes. It marks the release latest only if Hex identifies
+that version as its latest stable release.
+
+Rerun the same command after an interrupted release. It verifies an existing Hex
+package instead of replacing it, publishes missing docs separately, and leaves
+an existing GitHub Release intact. Source mismatches, failed CI, retired Hex
+versions, stale docs, and draft or prerelease GitHub entries stop the script.
+It reports success only after Hex, HexDocs, consumer checks, and the public
+GitHub Release are confirmed.
+
+To verify an already completed release without publishing anything:
+
+```sh
+elixir scripts/release.exs --verify-only
+```
+
+This still builds and downloads packages and runs consumer checks in temporary
+directories. It fails if any publication is missing or inconsistent.
 
 Require a clean working tree before tagging. The version tag must identify
 the final package commit, including the selected native manifests. If that
