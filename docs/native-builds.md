@@ -150,9 +150,13 @@ Before publication, compare the selected source to the committed release
 candidate. This command must produce no differences:
 
 ```sh
-native_source=$(elixir -e '{build, _} = Code.eval_file("native-build.exs"); IO.puts(build.source_revision)')
-git diff --exit-code "$native_source" HEAD -- native Cargo.toml Cargo.lock rust-toolchain.toml .github/workflows/precompile.yml
+elixir scripts/check_native_build.exs
 ```
+
+Regular CI runs this check before dependency resolution or native compilation.
+It fetches full Git history so the selected source revision is available. The
+check compares committed inputs with `HEAD`; commit local changes before running
+it. Elixir-only and documentation changes do not require a native rebuild.
 
 If it reports changes, build and verify a new immutable native release before
 selecting its manifests. Passing tests with `LANCEDB_BUILD=true` does not

@@ -95,7 +95,15 @@ scripts/test_s3.sh
 
 CI runs formatting, strict Elixir linting, Clippy with warnings denied for
 all native targets, locked Cargo tests and the full Elixir
-suite with coverage. It also replays every property with seeds `0` and
+suite with coverage. Before resolving dependencies or compiling Rust, it
+compares committed native inputs against the source revision selected in
+`native-build.exs`. Native source, Cargo files, toolchain, or precompile workflow
+changes require a newly published and verified native build with matching build
+and checksum manifests. Elixir-only changes can retain the selected build.
+Run the same check locally with `elixir scripts/check_native_build.exs` after
+committing changes; it compares the selected revision with `HEAD` and requires
+that revision in local Git history. It does not download or verify archives.
+CI also replays every property with seeds `0` and
 `12345`, in addition to the full suite's random seed. Elixir line coverage
 must be at least 90%. Coverage excludes test support and the internal NIF module,
 whose fallback stubs are replaced by Rust NIFs. Elixir coverage does not
