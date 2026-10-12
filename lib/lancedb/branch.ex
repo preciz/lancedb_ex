@@ -2,7 +2,6 @@ defmodule LanceDB.Branch do
   @moduledoc "Independent branch handles and branch management."
   alias LanceDB.{Backend, Options, Result}
   @type table :: LanceDB.Table.t()
-  @type t :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc """
   Creates a writable branch and returns a new handle without changing `table`.

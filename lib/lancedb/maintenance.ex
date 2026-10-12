@@ -3,7 +3,6 @@ defmodule LanceDB.Maintenance do
   alias LanceDB.Backend
   alias LanceDB.Operations.Maintenance
   @type table :: LanceDB.Table.t()
-  @type t :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc """
   Returns table statistics as a map with string keys.

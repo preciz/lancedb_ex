@@ -2,7 +2,6 @@ defmodule LanceDB.SchemaEvolution do
   @moduledoc "SQL and Expr transformations, column sources and snapshot backfills."
   alias LanceDB.Operations.SchemaEvolution
   @type table :: LanceDB.Table.t()
-  @type t :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc """
   Adds columns from SQL strings or `LanceDB.Expr` values for existing rows.
@@ -80,7 +79,7 @@ defmodule LanceDB.SchemaEvolution do
   positive `:expected_version` guards against changes to the target version.
   Row counts and successful source EOF are checked before committing.
   """
-  @spec add_from_source(t(), LanceDB.Source.t(), keyword()) ::
+  @spec add_from_source(table(), LanceDB.Source.t(), keyword()) ::
           result(LanceDB.WriteResult.t())
   def add_from_source(table, source, opts \\ []) do
     LanceDB.Execution.write(
@@ -100,7 +99,7 @@ defmodule LanceDB.SchemaEvolution do
   EOF before committing. Returns a `LanceDB.WriteResult`.
   """
   @spec backfill_columns(
-          t(),
+          table(),
           LanceDB.Schema.t() | list(),
           (LanceDB.Batch.t() -> LanceDB.Batch.t() | [map()]),
           keyword()

@@ -3,7 +3,6 @@ defmodule LanceDB.History do
   alias LanceDB.{Backend, Options, Result}
   alias LanceDB.Backend.ResultCodec
   @type table :: LanceDB.Table.t()
-  @type t :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc "Returns the version currently visible through this table handle."
   @spec version(table()) :: result(pos_integer())

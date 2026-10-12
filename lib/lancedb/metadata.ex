@@ -2,7 +2,6 @@ defmodule LanceDB.Metadata do
   alias LanceDB.{Backend, Options, Result}
   @moduledoc "Schema and field metadata operations."
   @type table :: LanceDB.Table.t()
-  @type t :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc "Returns schema metadata as a map with string keys. An empty map returns `%{}`."
   @spec schema(table()) :: result(map())
