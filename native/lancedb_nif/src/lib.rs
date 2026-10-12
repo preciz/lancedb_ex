@@ -39,6 +39,7 @@ mod query;
 mod ranking;
 mod read_task;
 mod reply;
+mod request;
 mod rerank;
 mod resources;
 mod schema;

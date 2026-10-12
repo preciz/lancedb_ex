@@ -1,12 +1,12 @@
 use crate::analyzer::{fts_builder, FtsAnalyzer};
 use crate::error::Failure;
-use crate::resources::{TableResource, RUNTIME};
+use crate::resources::TableResource;
 use lancedb::index::scalar::{
     BooleanQuery, BoostQuery, FtsQuery, FullTextSearchQuery, MatchQuery, MultiMatchQuery, Operator,
     PhraseQuery,
 };
 use lancedb::index::IndexType;
-use rustler::ResourceArc;
+use rustler::{Atom, Env, ResourceArc, Term};
 
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
@@ -229,12 +229,14 @@ fn tokenize(text: String, analyzer: String) -> Result<String, Failure> {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn tokenize_table(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     text: String,
     selector: String,
     name: String,
-) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let tokens = crate::compat::fts::index(async {
             match selector.as_str() {
                 "index" => table.table.tokenize(&text, &name).await,

@@ -59,24 +59,28 @@ UUID. A first-segment UUID alone misses appended index segments; the SDK's
 warming rejects observed concurrent changes. Detection follows the configured
 read-consistency interval. No completion record promises cache residency.
 
-Connect and table open use a monitored one-shot Tokio task. Read admission
-happens before spawning; one deadline covers connection/session setup and the
-entire SDK operation. Reference-tagged replies preserve the synchronous Elixir
-API without retaining a BEAM scheduler. Timeout, caller death, and caught task
-panics drop the operation future and release its permit before replying. SDK
-tasks spawned separately can outlive that future.
+One-shot reads use monitored Tokio tasks. Admission happens before spawning;
+operations with deadlines retain one budget across preparation and execution.
+Reference-tagged replies preserve the synchronous Elixir API without retaining
+a BEAM scheduler. Timeout, caller death, and caught task panics drop the read
+future and release its permit before replying. SDK tasks spawned separately can
+outlive that future.
 
-Blocking table/index inspection, index prewarming and deletion, and table
-listing/deletion use dirty I/O schedulers. Their storage waits retain an I/O
-thread while leaving dirty CPU schedulers available for Arrow conversion.
-The embedded table URI accessor only copies an in-memory string. CPU-heavy
-operations such as index construction and row codecs use dirty CPU schedulers.
+All SDK waits run outside BEAM schedulers, including metadata inspection, query
+planning and counts, blobs, index construction, maintenance, and writes.
+Dirty CPU schedulers decode input and perform synchronous codecs. Blob results
+are encoded in an owned environment after I/O; message transfer shares their
+binary storage. The SDK's synchronous merge reader bridges to its input stream
+only on background blocking threads.
 
 Read cancellation and write completion have different guarantees. Explicit
 cursor close waits for cleanup and read slot release. A writer abort sends
 an input error and waits for SDK execution. Dropping a write future can
-leave SDK tasks running separately. Cancellation cannot guarantee rollback
-after final commit starts.
+leave SDK tasks running separately. One-shot writes continue after caller death;
+their permit stays held until SDK execution settles. Stream preparation transfers
+its permit to the writer, and asynchronous index creation transfers it to the job
+watcher. Push, finish, abort, and job commands need no additional admission slot.
+Cancellation cannot guarantee rollback after final commit starts.
 
 Backfills keep the final batch until successful source EOF. The SDK can stop
 reading after it receives the expected row count. Checking EOF prevents a

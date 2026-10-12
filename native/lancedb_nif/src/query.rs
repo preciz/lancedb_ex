@@ -7,11 +7,11 @@ pub(crate) use request::QueryRequest;
 use crate::execution::QueryOperation;
 use crate::hybrid::HybridPlan;
 use crate::projection::{project, OutputProjection};
-use crate::resources::{TableResource, RUNTIME};
+use crate::resources::TableResource;
 use arrow_array::RecordBatch;
 use futures::{Stream, TryStreamExt};
 use lancedb::query::{ExecutableQuery, Query, QueryExecutionOptions, TakeQuery, VectorQuery};
-use rustler::ResourceArc;
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::pin::Pin;
 
 pub(crate) type BatchStream = Pin<Box<dyn Stream<Item = Result<RecordBatch, Failure>> + Send>>;
@@ -77,14 +77,15 @@ async fn execute_query(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn query_execute(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     request: String,
     operation: QueryOperation,
-) -> Result<String, Failure> {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
     let request: QueryRequest = serde_json::from_str(&request).map_err(Failure::from_error)?;
-    let execution = request.execution;
-    RUNTIME.block_on(execution.run(async {
-        let _permit = crate::execution::Permit::read()?;
+    let deadline = request.execution.deadline();
+    crate::read_task::spawn(env, reference, deadline, async move {
         let query = request.prepare(&table.table).await?;
         match operation {
             QueryOperation::Explain => query.explain(false).await,
@@ -94,16 +95,17 @@ fn query_execute(
                 query.output_schema().await?.as_ref(),
             )),
         }
-    }))
+    })
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn count_rows(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     filter: Option<String>,
-) -> Result<usize, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         match table_res.table.count_rows(filter).await {
             Ok(count) => Ok(count),
             Err(e) => {

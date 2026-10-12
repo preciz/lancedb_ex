@@ -37,13 +37,6 @@ impl ExecutionOptions {
             operation,
         }
     }
-
-    pub(crate) async fn run<T>(
-        self,
-        operation: impl Future<Output = Result<T, Failure>>,
-    ) -> Result<T, Failure> {
-        self.deadline().run(operation).await
-    }
 }
 
 impl Deadline {
@@ -102,7 +95,7 @@ mod tests {
         let options = ExecutionOptions {
             timeout_ms: Some(5),
         };
-        let result: Result<(), Failure> = RUNTIME.block_on(options.run(async {
+        let result: Result<(), Failure> = RUNTIME.block_on(options.deadline().run(async {
             let _guard = DropGuard(&dropped);
             tokio::task::yield_now().await;
             // Simulate waiting for a later result batch, not just initial execution.
@@ -119,9 +112,12 @@ mod tests {
     fn successful_results_and_errors_pass_through_with_or_without_deadlines() {
         for timeout_ms in [None, Some(10_000)] {
             let options = ExecutionOptions { timeout_ms };
-            assert_eq!(RUNTIME.block_on(options.run(async { Ok(42) })), Ok(42));
+            assert_eq!(
+                RUNTIME.block_on(options.deadline().run(async { Ok(42) })),
+                Ok(42)
+            );
             let result: Result<(), Failure> =
-                RUNTIME.block_on(options.run(async { Err("query failed".into()) }));
+                RUNTIME.block_on(options.deadline().run(async { Err("query failed".into()) }));
             assert_eq!(result, Err("query failed".into()));
         }
     }

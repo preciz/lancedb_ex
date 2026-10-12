@@ -150,7 +150,6 @@ pub(crate) async fn execute(
     options: Options,
     progress: Option<ProgressTarget>,
 ) -> Result<u64, Failure> {
-    let _permit = crate::execution::Permit::write()?;
     options
         .apply(table.add(data), progress)?
         .execute()

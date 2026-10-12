@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Complete message-based native waits for storage reads and writes, query
+  planning and counts, blobs, index operations, maintenance, and writer
+  backpressure and cleanup. Reads cancel on caller death; writes retain admission
+  until SDK settlement. Public synchronous return values remain unchanged.
+
 ## 0.2.0
 
 - Add opt-in, application-supervised `LanceDB.TableCache`: shared table opens,

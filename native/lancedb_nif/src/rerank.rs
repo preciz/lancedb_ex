@@ -5,9 +5,9 @@ use crate::error::Failure;
 use crate::execution::Deadline;
 use crate::hybrid::{with_scores, HybridResultPlan};
 use crate::query::{PreparedQuery, QueryRequest};
-use crate::resources::{TableResource, RUNTIME};
+use crate::resources::TableResource;
 use arrow_array::{Array, Float32Array, RecordBatch, UInt64Array};
-use rustler::{Env, ResourceArc};
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::{HashMap, HashSet};
 use std::panic::{RefUnwindSafe, UnwindSafe};
 
@@ -23,15 +23,15 @@ impl rustler::Resource for RerankResource {}
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn rerank_candidates(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     request: String,
     analyze: bool,
-) -> Result<(ResourceArc<RerankResource>, String, String, String), Failure> {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
     let request: QueryRequest = serde_json::from_str(&request).map_err(Failure::from_error)?;
-    let execution = request.execution;
-    let deadline = execution.deadline();
-    RUNTIME.block_on(deadline.run(async {
-        let _permit = crate::execution::Permit::read()?;
+    let deadline = request.execution.deadline();
+    crate::read_task::spawn(env, reference, deadline, async move {
         let PreparedQuery::Hybrid(plan) = request.prepare(&table.table).await? else {
             return Err("Custom rerankers require hybrid search".into());
         };
@@ -44,7 +44,7 @@ fn rerank_candidates(
             deadline,
         });
         Ok((resource, vector_json, text_json, description))
-    }))
+    })
 }
 
 #[derive(serde::Deserialize)]

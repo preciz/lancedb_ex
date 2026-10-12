@@ -107,10 +107,10 @@ IO.inspect(matches)
 
 `connect/0` uses `"./lancedb"` by default. Connections and tables are native
 resource handles. The BEAM garbage collector releases these handles. Native
-operations share a Tokio runtime. Connect, table open, cursor requests, job
-waits, and writer cleanup run native waits on Tokio and reply by message,
-leaving BEAM schedulers available. Many other native calls use dirty schedulers
-and can retain one while waiting for storage.
+operations share a Tokio runtime. Storage operations, cursor requests, job
+commands, and writer backpressure and cleanup wait on Tokio and reply by message,
+leaving BEAM schedulers available. CPU work such as row conversion and input
+decoding uses dirty CPU schedulers.
 
 Connections accept `:timeout_ms` and session cache budgets in the third
 argument to `connect/3`. Table opening accepts its own deadline and per-open

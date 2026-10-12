@@ -1,13 +1,15 @@
 use crate::error::Failure;
-use crate::resources::{atoms, TableResource, RUNTIME};
-use rustler::{Atom, ResourceArc};
+use crate::resources::{atoms, TableResource};
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
-// These metadata calls wait on storage inside block_on, retaining the NIF thread.
-#[rustler::nif(schedule = "DirtyIo")]
-fn list_tags(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn list_tags(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let tags = table_res.table.tags().await.map_err(Failure::from_error)?;
         let entries = tags.list().await.map_err(Failure::from_error)?;
         let entries: HashMap<_, _> = entries.into_iter().map(|(name, tag)| (
@@ -19,24 +21,31 @@ fn list_tags(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn tag_version(table_res: ResourceArc<TableResource>, name: String) -> Result<u64, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn tag_version(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let tags = table_res.table.tags().await.map_err(Failure::from_error)?;
         tags.get_version(&name).await.map_err(Failure::from_error)
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn tag_action(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     action: String,
     name: String,
     version: Option<u64>,
+    reference: Term<'_>,
 ) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         // Keep the package's checked-out handles read-only, including tag metadata.
         table_res.ensure_mutable()?;
         let mut tags = table_res.table.tags().await.map_err(Failure::from_error)?;
@@ -62,18 +71,24 @@ fn tag_action(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn table_version(table_res: ResourceArc<TableResource>) -> Result<u64, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn table_version(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         table_res.table.version().await.map_err(Failure::from_error)
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn list_versions(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn list_versions(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let versions = table_res
             .table
             .list_versions()
@@ -88,14 +103,15 @@ fn list_versions(table_res: ResourceArc<TableResource>) -> Result<String, Failur
 
 // SDK branch checkout creates an independent DatasetConsistencyWrapper, including
 // for main. Cloning Table/Arc alone would still share the mutable view.
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn snapshot_table(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     version: Option<u64>,
     tag: Option<String>,
-) -> Result<ResourceArc<TableResource>, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let branch = table
             .table
             .current_branch()
@@ -117,36 +133,42 @@ fn snapshot_table(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn restore_version(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     version: u64,
-) -> Result<crate::wire::Version, Failure> {
-    restore_version_impl(table, version)
-        .map(crate::wire::Version)
-        .map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        restore_version_impl(table, version)
+            .await
+            .map(crate::wire::Version)
+            .map_err(Failure::before_write)
+    })
 }
 
-fn restore_version_impl(table: ResourceArc<TableResource>, version: u64) -> Result<u64, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
-        table.ensure_mutable()?;
-        let branch = table
-            .table
-            .current_branch()
-            .unwrap_or_else(|| "main".into());
-        let snapshot = table
-            .table
-            .checkout_branch(&branch, Some(version))
-            .await
-            .map_err(Failure::from_error)?;
-        snapshot.restore().await.map_err(Failure::write_error)?;
-        let version = snapshot.version().await.map_err(Failure::write_error)?;
-        table
-            .table
-            .checkout_latest()
-            .await
-            .map_err(Failure::write_error)?;
-        Ok(version)
-    })
+async fn restore_version_impl(
+    table: ResourceArc<TableResource>,
+    version: u64,
+) -> Result<u64, Failure> {
+    table.ensure_mutable()?;
+    let branch = table
+        .table
+        .current_branch()
+        .unwrap_or_else(|| "main".into());
+    let snapshot = table
+        .table
+        .checkout_branch(&branch, Some(version))
+        .await
+        .map_err(Failure::from_error)?;
+    snapshot.restore().await.map_err(Failure::write_error)?;
+    let version = snapshot.version().await.map_err(Failure::write_error)?;
+    table
+        .table
+        .checkout_latest()
+        .await
+        .map_err(Failure::write_error)?;
+    Ok(version)
 }

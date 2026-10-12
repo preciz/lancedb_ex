@@ -1,7 +1,7 @@
 use crate::error::Failure;
-use crate::resources::{TableResource, RUNTIME};
+use crate::resources::TableResource;
 use lance::{dataset::ReadParams, session::Session};
-use rustler::ResourceArc;
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::sync::Arc;
 
 pub(crate) fn session(
@@ -19,10 +19,13 @@ pub(crate) fn session(
     )))
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn cache_stats(table: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn cache_stats(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let dataset = table.table.dataset().ok_or_else(|| {
             Failure::new("unsupported", "Cache statistics require an embedded table")
         })?;

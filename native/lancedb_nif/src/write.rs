@@ -1,6 +1,6 @@
 use crate::error::Failure;
-use crate::resources::{TableResource, RUNTIME};
-use rustler::ResourceArc;
+use crate::resources::TableResource;
+use rustler::{Atom, Env, ResourceArc, Term};
 
 #[derive(rustler::NifMap)]
 struct UpdateResult {
@@ -34,51 +34,54 @@ impl UpdateValue {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn update_rows(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     changes: Vec<(String, UpdateValue)>,
     filter: Option<String>,
-) -> Result<crate::wire::Counts<UpdateResult>, Failure> {
-    update_rows_impl(table_res, changes, filter)
-        .map(crate::wire::Counts)
-        .map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        update_rows_impl(table_res, changes, filter)
+            .await
+            .map(crate::wire::Counts)
+            .map_err(Failure::before_write)
+    })
 }
 
-fn update_rows_impl(
+async fn update_rows_impl(
     table_res: ResourceArc<TableResource>,
     changes: Vec<(String, UpdateValue)>,
     filter: Option<String>,
 ) -> Result<UpdateResult, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
-        table_res.ensure_mutable()?;
-        let schema = table_res
-            .table
-            .schema()
-            .await
+    table_res.ensure_mutable()?;
+    let schema = table_res
+        .table
+        .schema()
+        .await
+        .map_err(Failure::from_error)?;
+    crate::compat::update::validate(&schema)?;
+    let mut update = table_res.table.update();
+    if let Some(filter) = filter {
+        update = update.only_if(filter);
+    }
+    for (column, value) in changes {
+        let field = schema
+            .field_with_name(&column)
             .map_err(Failure::from_error)?;
-        crate::compat::update::validate(&schema)?;
-        let mut update = table_res.table.update();
-        if let Some(filter) = filter {
-            update = update.only_if(filter);
-        }
-        for (column, value) in changes {
-            let field = schema
-                .field_with_name(&column)
-                .map_err(Failure::from_error)?;
-            update = update.column(column, value.expression(field)?);
-        }
-        update
-            .execute()
-            .await
-            .map(|result| UpdateResult {
-                updated: result.rows_updated,
-                version: result.version,
-            })
-            .map_err(|e| {
-                let message = format!("Failed to update rows: {e}");
-                Failure::write_error(e).context(message)
-            })
-    })
+        update = update.column(column, value.expression(field)?);
+    }
+    update
+        .execute()
+        .await
+        .map(|result| UpdateResult {
+            updated: result.rows_updated,
+            version: result.version,
+        })
+        .map_err(|e| {
+            let message = format!("Failed to update rows: {e}");
+            Failure::write_error(e).context(message)
+        })
 }
 
 #[derive(serde::Deserialize)]
@@ -107,31 +110,34 @@ struct DeleteResult {
     version: u64,
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn delete_rows_result(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     predicate: String,
-) -> Result<crate::wire::Counts<DeleteResult>, Failure> {
-    delete_rows_result_impl(table, predicate)
-        .map(crate::wire::Counts)
-        .map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        delete_rows_result_impl(table, predicate)
+            .await
+            .map(crate::wire::Counts)
+            .map_err(Failure::before_write)
+    })
 }
 
-fn delete_rows_result_impl(
+async fn delete_rows_result_impl(
     table: ResourceArc<TableResource>,
     predicate: String,
 ) -> Result<DeleteResult, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
-        let result = table
-            .table
-            .delete(&predicate)
-            .await
-            .map_err(Failure::write_error)?;
-        Ok(DeleteResult {
-            deleted: result.num_deleted_rows,
-            version: result.version,
-        })
+    let result = table
+        .table
+        .delete(&predicate)
+        .await
+        .map_err(Failure::write_error)?;
+    Ok(DeleteResult {
+        deleted: result.num_deleted_rows,
+        version: result.version,
     })
 }
 

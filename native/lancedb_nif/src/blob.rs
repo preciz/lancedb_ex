@@ -3,12 +3,11 @@ pub(crate) mod schema;
 pub(crate) mod write_options;
 use crate::{
     error::Failure,
-    execution::Permit,
-    resources::{atoms, TableResource, RUNTIME},
+    resources::{atoms, TableResource},
 };
 use arrow_array::Array;
 use lancedb::blob::{BlobFile, BlobRangeRequest};
-use rustler::{Atom, Binary, Env, OwnedBinary, ResourceArc};
+use rustler::{Atom, Binary, Encoder, Env, OwnedBinary, OwnedEnv, ResourceArc, Term};
 use std::panic::{RefUnwindSafe, UnwindSafe};
 
 pub(crate) struct BlobResource {
@@ -40,125 +39,194 @@ fn binaries<'a>(
         .collect()
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_columns(table: ResourceArc<TableResource>) -> Result<Vec<String>, Failure> {
-    let _permit = Permit::read()?;
-    RUNTIME
-        .block_on(table.table.blob_columns())
-        .map_err(Failure::from_error)
+// Encode in an owned environment after I/O completes. Copy bytes once into a
+// BEAM binary; transferring the saved term to the reply only copies references.
+struct BlobValue {
+    env: OwnedEnv,
+    value: rustler::env::SavedTerm,
+}
+impl BlobValue {
+    fn new(operation: impl FnOnce(Env<'_>) -> Result<Term<'_>, Failure>) -> Result<Self, Failure> {
+        let env = OwnedEnv::new();
+        let value = env.run(|source| operation(source).map(|value| env.save(value)))?;
+        Ok(Self { env, value })
+    }
+}
+impl Encoder for BlobValue {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        self.env.run(|source| self.value.load(source).in_env(env))
+    }
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn fetch_blobs<'a>(
-    env: Env<'a>,
+#[rustler::nif]
+fn blob_columns(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        table
+            .table
+            .blob_columns()
+            .await
+            .map_err(Failure::from_error)
+    })
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn fetch_blobs(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     column: String,
     row_ids: Vec<u64>,
-) -> Result<Vec<Option<Binary<'a>>>, Failure> {
-    let _permit = Permit::read()?;
-    let values = RUNTIME
-        .block_on(table.table.fetch_blobs(&column, &row_ids))
-        .map_err(Failure::from_error)?;
-    binaries(env, &values)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let values = table
+            .table
+            .fetch_blobs(&column, &row_ids)
+            .await
+            .map_err(Failure::from_error)?;
+        BlobValue::new(|env| Ok(binaries(env, &values)?.encode(env)))
+    })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn fetch_blob_ranges<'a>(
-    env: Env<'a>,
+#[rustler::nif(schedule = "DirtyCpu")]
+fn fetch_blob_ranges(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     column: String,
     requests: Vec<(u64, u64, u64)>,
-) -> Result<Vec<Option<Binary<'a>>>, Failure> {
-    let _permit = Permit::read()?;
-    let requests: Vec<_> = requests
-        .into_iter()
-        .map(|(id, offset, length)| BlobRangeRequest::new(id, offset, length))
-        .collect();
-    let values = RUNTIME
-        .block_on(table.table.fetch_blob_ranges(&column, requests))
-        .map_err(Failure::from_error)?;
-    binaries(env, &values)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let requests: Vec<_> = requests
+            .into_iter()
+            .map(|(id, offset, length)| BlobRangeRequest::new(id, offset, length))
+            .collect();
+        let values = table
+            .table
+            .fetch_blob_ranges(&column, requests)
+            .await
+            .map_err(Failure::from_error)?;
+        BlobValue::new(|env| Ok(binaries(env, &values)?.encode(env)))
+    })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn fetch_blob_files(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     column: String,
     row_ids: Vec<u64>,
-) -> Result<Vec<Option<ResourceArc<BlobResource>>>, Failure> {
-    let _permit = Permit::read()?;
-    let values = RUNTIME
-        .block_on(table.table.fetch_blob_files(&column, &row_ids))
-        .map_err(Failure::from_error)?;
-    Ok(values
-        .into_iter()
-        .map(|file| file.map(|file| ResourceArc::new(BlobResource { file })))
-        .collect())
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let values = table
+            .table
+            .fetch_blob_files(&column, &row_ids)
+            .await
+            .map_err(Failure::from_error)?;
+        Ok(values
+            .into_iter()
+            .map(|file| file.map(|file| ResourceArc::new(BlobResource { file })))
+            .collect::<Vec<_>>())
+    })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_read<'a>(
-    env: Env<'a>,
+#[rustler::nif]
+fn blob_read(
+    env: Env<'_>,
     blob: ResourceArc<BlobResource>,
     length: Option<usize>,
-) -> Result<Binary<'a>, Failure> {
-    let _permit = Permit::read()?;
-    let bytes = RUNTIME
-        .block_on(async {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let bytes = (async {
             match length {
                 Some(length) => blob.file.read_up_to(length).await,
                 None => blob.file.read().await,
             }
         })
+        .await
         .map_err(Failure::from_error)?;
-    binary(env, &bytes)
+        BlobValue::new(|env| Ok(binary(env, &bytes)?.encode(env)))
+    })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_read_ranges<'a>(
-    env: Env<'a>,
+#[rustler::nif(schedule = "DirtyCpu")]
+fn blob_read_ranges(
+    env: Env<'_>,
     blob: ResourceArc<BlobResource>,
     ranges: Vec<(u64, u64)>,
-) -> Result<Vec<Binary<'a>>, Failure> {
-    let _permit = Permit::read()?;
-    let ranges = ranges
-        .into_iter()
-        .map(|(offset, length)| {
-            offset
-                .checked_add(length)
-                .map(|end| offset..end)
-                .ok_or_else(|| Failure::from("Blob range overflows uint64"))
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let ranges = ranges
+            .into_iter()
+            .map(|(offset, length)| {
+                offset
+                    .checked_add(length)
+                    .map(|end| offset..end)
+                    .ok_or_else(|| Failure::from("Blob range overflows uint64"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let bytes = blob
+            .file
+            .read_ranges(&ranges)
+            .await
+            .map_err(Failure::from_error)?;
+        BlobValue::new(|env| {
+            let values = bytes
+                .iter()
+                .map(|bytes| binary(env, bytes))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(values.encode(env))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let bytes = RUNTIME
-        .block_on(blob.file.read_ranges(&ranges))
-        .map_err(Failure::from_error)?;
-    bytes.iter().map(|bytes| binary(env, bytes)).collect()
+    })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_seek(blob: ResourceArc<BlobResource>, offset: u64) -> Result<Atom, Failure> {
-    RUNTIME
-        .block_on(blob.file.seek(offset))
-        .map_err(Failure::from_error)?;
+#[rustler::nif]
+fn blob_seek(
+    env: Env<'_>,
+    blob: ResourceArc<BlobResource>,
+    offset: u64,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::settle(env, reference, async move {
+        blob.file.seek(offset).await.map_err(Failure::from_error)?;
+        Ok(atoms::ok())
+    })
+}
+#[rustler::nif]
+fn blob_tell(
+    env: Env<'_>,
+    blob: ResourceArc<BlobResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        blob.file.tell().await.map_err(Failure::from_error)
+    })
+}
+#[rustler::nif]
+fn blob_close(
+    env: Env<'_>,
+    blob: ResourceArc<BlobResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::settle(env, reference, async move {
+        blob.file.close().await.map_err(Failure::from_error)?;
+        Ok(atoms::ok())
+    })
+}
+#[rustler::nif]
+fn blob_is_closed(
+    env: Env<'_>,
+    blob: ResourceArc<BlobResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::reply::spawn(env, reference, async move { blob.file.is_closed().await });
     Ok(atoms::ok())
-}
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_tell(blob: ResourceArc<BlobResource>) -> Result<u64, Failure> {
-    RUNTIME
-        .block_on(blob.file.tell())
-        .map_err(Failure::from_error)
-}
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_close(blob: ResourceArc<BlobResource>) -> Result<Atom, Failure> {
-    RUNTIME
-        .block_on(blob.file.close())
-        .map_err(Failure::from_error)?;
-    Ok(atoms::ok())
-}
-#[rustler::nif(schedule = "DirtyIo")]
-fn blob_is_closed(blob: ResourceArc<BlobResource>) -> bool {
-    RUNTIME.block_on(blob.file.is_closed())
 }
 #[rustler::nif]
 fn blob_size(blob: ResourceArc<BlobResource>) -> u64 {

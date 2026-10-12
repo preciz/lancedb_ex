@@ -1,7 +1,7 @@
 use crate::error::Failure;
-use crate::resources::{atoms, TableResource, RUNTIME};
+use crate::resources::{atoms, TableResource};
 use lance::dataset::refs::Ref;
-use rustler::{Atom, ResourceArc};
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::sync::Arc;
 
 #[derive(serde::Deserialize)]
@@ -13,16 +13,18 @@ enum SourceRef {
     Branch { name: String, version: Option<u64> },
 }
 
-// Branch metadata operations can block on local storage or S3.
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn create_branch(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     name: String,
     source: String,
-) -> Result<ResourceArc<TableResource>, Failure> {
-    let source: SourceRef = serde_json::from_str(&source).map_err(Failure::from_error)?;
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        let source: SourceRef = serde_json::from_str(&source).map_err(Failure::from_error)?;
+
         table.ensure_mutable()?;
         let source = match source {
             SourceRef::Current => Ref::Version(
@@ -44,14 +46,15 @@ fn create_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn checkout_branch(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     name: String,
     version: Option<u64>,
-) -> Result<ResourceArc<TableResource>, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let branch = table
             .table
             .checkout_branch(&name, version)
@@ -63,11 +66,18 @@ fn checkout_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn list_branches(table: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
-        let branches = table.table.list_branches().await.map_err(Failure::from_error)?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn list_branches(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
+        let branches = table
+            .table
+            .list_branches()
+            .await
+            .map_err(Failure::from_error)?;
         let branches: std::collections::HashMap<_, _> = branches.into_iter().map(|(name, b)| (name,
             serde_json::json!({"parent_branch": b.parent_branch, "parent_version": b.parent_version,
                 "created_at": b.create_at, "manifest_size": b.manifest_size, "metadata": b.metadata})
@@ -84,10 +94,16 @@ fn current_branch(table: ResourceArc<TableResource>) -> Result<String, Failure> 
         .unwrap_or_else(|| "main".into()))
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn delete_branch(table: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn delete_branch(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         table.ensure_mutable()?;
         table
             .table
@@ -99,9 +115,12 @@ fn delete_branch(table: ResourceArc<TableResource>, name: String) -> Result<Atom
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-fn table_uri(table: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+fn table_uri(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         table.table.uri().await.map_err(Failure::from_error)
     })
 }

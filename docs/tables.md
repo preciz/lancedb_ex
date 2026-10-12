@@ -290,8 +290,9 @@ workload:
 {:ok, cleanup} = LanceDB.Maintenance.cleanup_old_versions(table, older_than_seconds: 30 * 86_400)
 ```
 
-These operations run synchronously on dirty schedulers. Schedule them in
-your application. The package does not start background maintenance jobs.
+These operations return synchronously to the Elixir caller while native work
+runs on Tokio and replies by message. Storage waits retain no BEAM scheduler.
+Schedule maintenance in your application; the package does not schedule it.
 
 `compact_files/2` defaults to 1,048,576 target rows per fragment. It uses
 the SDK's other compaction defaults, including index remapping. Its result

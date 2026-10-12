@@ -1,11 +1,14 @@
 use crate::error::Failure;
-use crate::resources::{atoms, TableResource, RUNTIME};
-use rustler::{Atom, ResourceArc};
+use crate::resources::{atoms, TableResource};
+use rustler::{Atom, Env, ResourceArc, Term};
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn table_stats(table: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn table_stats(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let stats = table.table.stats().await.map_err(Failure::from_error)?;
         let fragments = stats.fragment_stats;
         let lengths = fragments.lengths;
@@ -29,13 +32,16 @@ fn table_stats(table: ResourceArc<TableResource>) -> Result<String, Failure> {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn optimize_indices(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     options: String,
+    reference: Term<'_>,
 ) -> Result<Atom, Failure> {
-    let options: crate::maintenance_options::IndexOptions =
-        serde_json::from_str(&options).map_err(Failure::from_error)?;
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        let options: crate::maintenance_options::IndexOptions =
+            serde_json::from_str(&options).map_err(Failure::from_error)?;
+
         table_res
             .table
             .optimize(lancedb::table::OptimizeAction::Index(options.into_sdk()))
@@ -50,12 +56,15 @@ fn optimize_indices(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn compact_files(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     options: String,
-) -> Result<String, Failure> {
-    let options = crate::maintenance_options::compaction(&options)?;
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        let options = crate::maintenance_options::compaction(&options)?;
+
         let stats = table_res
             .table
             .optimize(lancedb::table::OptimizeAction::Compact {
@@ -80,19 +89,22 @@ fn compact_files(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn cleanup_old_versions(
+    env: Env<'_>,
     table_res: ResourceArc<TableResource>,
     options: String,
-) -> Result<String, Failure> {
-    let options: crate::maintenance_options::PruneOptions =
-        serde_json::from_str(&options).map_err(Failure::from_error)?;
-    let older_than_seconds = options.older_than_seconds;
-    if !(0..=31_536_000_000).contains(&older_than_seconds) {
-        return Err("Invalid retention seconds".into());
-    }
-    let duration = lancedb::table::optimize::Duration::try_seconds(older_than_seconds)
-        .ok_or("Invalid retention duration")?;
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        let options: crate::maintenance_options::PruneOptions =
+            serde_json::from_str(&options).map_err(Failure::from_error)?;
+        let older_than_seconds = options.older_than_seconds;
+        if !(0..=31_536_000_000).contains(&older_than_seconds) {
+            return Err("Invalid retention seconds".into());
+        }
+        let duration = lancedb::table::optimize::Duration::try_seconds(older_than_seconds)
+            .ok_or("Invalid retention duration")?;
+
         let stats = table_res
             .table
             .optimize(lancedb::table::OptimizeAction::Prune {
@@ -120,10 +132,13 @@ fn cleanup_old_versions(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn uses_v2_manifest_paths(table: ResourceArc<TableResource>) -> Result<bool, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn uses_v2_manifest_paths(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         table
             .table
             .as_native()
@@ -134,11 +149,15 @@ fn uses_v2_manifest_paths(table: ResourceArc<TableResource>) -> Result<bool, Fai
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn migrate_manifest_paths_v2(table: ResourceArc<TableResource>) -> Result<Atom, Failure> {
-    RUNTIME
-        .block_on(async {
-            let _permit = crate::execution::Permit::write()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn migrate_manifest_paths_v2(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        (async {
             table.ensure_mutable()?;
             table
                 .table
@@ -149,5 +168,7 @@ fn migrate_manifest_paths_v2(table: ResourceArc<TableResource>) -> Result<Atom, 
                 .map_err(Failure::write_error)?;
             Ok(atoms::migrated())
         })
+        .await
         .map_err(Failure::before_write)
+    })
 }

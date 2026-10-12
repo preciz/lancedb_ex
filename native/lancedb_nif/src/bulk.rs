@@ -11,13 +11,13 @@ use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::{ArrowError, SchemaRef};
 use futures::{StreamExt, TryStreamExt};
 use lancedb::arrow::SendableRecordBatchStream;
-use rustler::{Env, ResourceArc};
+use rustler::{Atom, Env, LocalPid, ResourceArc, Term};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn create_stream_open(
     env: Env<'_>,
     conn: ResourceArc<ConnectionResource>,
@@ -25,17 +25,24 @@ fn create_stream_open(
     schema: String,
     metadata: HashMap<String, String>,
     mode: String,
-) -> Result<ResourceArc<WriterResource>, Failure> {
-    create_stream_open_impl(env, conn, name, schema, metadata, mode).map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    let owner = env.pid();
+    crate::request::write(env, reference, move |permit| async move {
+        create_stream_open_impl(owner, conn, name, schema, metadata, mode, permit)
+            .await
+            .map_err(Failure::before_write)
+    })
 }
 
-fn create_stream_open_impl(
-    env: Env<'_>,
+async fn create_stream_open_impl(
+    owner: LocalPid,
     conn: ResourceArc<ConnectionResource>,
     name: String,
     schema: String,
     metadata: HashMap<String, String>,
     mode: String,
+    permit: Permit,
 ) -> Result<ResourceArc<WriterResource>, Failure> {
     let schema = crate::schema::storage::StorageSchema::prepare(
         crate::schema::definition::explicit_schema(&schema)?,
@@ -43,7 +50,6 @@ fn create_stream_open_impl(
     .into_arrow();
     let schema = Arc::new(schema.as_ref().clone().with_metadata(metadata));
     let options = crate::creation::CreateOptions::parse(&mode)?.prepare(&conn.config)?;
-    let permit = Permit::write()?;
     let worker = Writer::spawn_operation(schema.clone(), move |stream, _| async move {
         let _permit = permit;
         let table = options
@@ -52,29 +58,34 @@ fn create_stream_open_impl(
             .map_err(Failure::from_error)?;
         Ok(WriteOutput::Created(Arc::new(table)))
     });
-    WriterResource::start(env, schema, worker)
+    WriterResource::start(owner, schema, worker)
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn merge_stream_open(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
     keys: Vec<String>,
     options: String,
-) -> Result<ResourceArc<WriterResource>, Failure> {
-    merge_stream_open_impl(env, table, keys, options).map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    let owner = env.pid();
+    crate::request::write(env, reference, move |permit| async move {
+        merge_stream_open_impl(owner, table, keys, options, permit)
+            .await
+            .map_err(Failure::before_write)
+    })
 }
 
-fn merge_stream_open_impl(
-    env: Env<'_>,
+async fn merge_stream_open_impl(
+    owner: LocalPid,
     table: ResourceArc<TableResource>,
     keys: Vec<String>,
     options: String,
+    permit: Permit,
 ) -> Result<ResourceArc<WriterResource>, Failure> {
     table.ensure_mutable()?;
-    let schema = RUNTIME
-        .block_on(table.table.schema())
-        .map_err(Failure::from_error)?;
+    let schema = table.table.schema().await.map_err(Failure::from_error)?;
     for key in &keys {
         let field = schema.field_with_name(key).map_err(Failure::from_error)?;
         if field.data_type() != &arrow_schema::DataType::Utf8 && !field.data_type().is_integer() {
@@ -85,7 +96,6 @@ fn merge_stream_open_impl(
         return Err("Merge keys cannot be empty".into());
     }
     let options = serde_json::from_str(&options).map_err(Failure::from_error)?;
-    let permit = Permit::write()?;
     let worker = Writer::spawn_operation(schema.clone(), move |stream, _| async move {
         let _permit = permit;
         let merge = crate::write::merge_builder(&table.table, &keys, options);
@@ -96,37 +106,44 @@ fn merge_stream_open_impl(
             .map_err(Failure::from_error)?;
         Ok(WriteOutput::Merge(result.into()))
     });
-    WriterResource::start(env, schema, worker)
+    WriterResource::start(owner, schema, worker)
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn columns_stream_open(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
     schema: String,
     expected_version: Option<u64>,
-) -> Result<ResourceArc<WriterResource>, Failure> {
-    columns_stream_open_impl(env, table, schema, expected_version).map_err(Failure::before_write)
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    let owner = env.pid();
+    crate::request::write(env, reference, move |permit| async move {
+        columns_stream_open_impl(owner, table, schema, expected_version, permit)
+            .await
+            .map_err(Failure::before_write)
+    })
 }
 
-fn columns_stream_open_impl(
-    env: Env<'_>,
+async fn columns_stream_open_impl(
+    owner: LocalPid,
     table: ResourceArc<TableResource>,
     schema: String,
     expected_version: Option<u64>,
+    permit: Permit,
 ) -> Result<ResourceArc<WriterResource>, Failure> {
     table.ensure_mutable()?;
     let schema = crate::schema::storage::StorageSchema::prepare(
         crate::schema::definition::explicit_schema(&schema)?,
     )?
     .into_arrow();
-    let permit = Permit::write()?;
     let wrapper = table
         .table
         .dataset()
         .ok_or("Column backfills require an embedded table")?;
-    let mut dataset = RUNTIME
-        .block_on(wrapper.get())
+    let mut dataset = wrapper
+        .get()
+        .await
         .map_err(Failure::from_error)?
         .as_ref()
         .clone();
@@ -136,8 +153,9 @@ fn columns_stream_open_impl(
             "Table changed before column backfill started",
         ));
     }
-    let expected_rows = RUNTIME
-        .block_on(dataset.count_rows(None))
+    let expected_rows = dataset
+        .count_rows(None)
+        .await
         .map_err(Failure::from_error)?;
     let worker = Writer::spawn_operation(schema.clone(), move |stream, _| async move {
         let _permit = permit;
@@ -168,7 +186,7 @@ fn columns_stream_open_impl(
         table.table.dataset().unwrap().update(dataset);
         Ok(WriteOutput::Columns(version))
     });
-    WriterResource::start(env, schema, worker)
+    WriterResource::start(owner, schema, worker)
 }
 
 // SDK merge/backfill readers are polled on background blocking threads. Yield the

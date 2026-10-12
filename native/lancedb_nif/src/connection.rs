@@ -2,7 +2,7 @@ use crate::error::Failure;
 mod config;
 pub(crate) use config::ConnectionConfig;
 
-use crate::resources::{atoms, ConnectionResource, RUNTIME};
+use crate::resources::{atoms, ConnectionResource};
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
@@ -43,14 +43,15 @@ fn connect(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn table_names(
+    env: Env<'_>,
     conn_res: ResourceArc<ConnectionResource>,
     start_after: Option<String>,
     limit: Option<u32>,
-) -> Result<Vec<String>, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let mut builder = conn_res.conn.table_names();
         if let Some(start_after) = start_after {
             builder = builder.start_after(start_after);
@@ -68,10 +69,16 @@ fn table_names(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn drop_table(conn_res: ResourceArc<ConnectionResource>, name: String) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn drop_table(
+    env: Env<'_>,
+    conn_res: ResourceArc<ConnectionResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         match conn_res.conn.drop_table(&name, &[]).await {
             Ok(()) => Ok(atoms::dropped()),
             Err(e) => {

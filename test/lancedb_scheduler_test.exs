@@ -25,10 +25,21 @@ defmodule LanceDB.SchedulerTest do
   end
 
   @tag timeout: 45_000
-  test "held storage leaves dirty CPU work available", %{path: path} do
-    {output, status} = run_fixture("metadata_schedulers.ex", path, 1, 2)
+  test "writer finish and abort yield schedulers until SDK settlement", %{path: path} do
+    {output, status} = run_fixture("writer_schedulers.ex", path, 1, 1)
     assert status == 0, output
-    assert output =~ "held storage leaves dirty CPU work available"
+    assert output =~ "writer finish and abort yield schedulers and await SDK settlement"
+  end
+
+  @tag timeout: 45_000
+  test "storage requests yield both scheduler pools and preserve admission lifetimes", %{
+    path: path
+  } do
+    {output, status} = run_fixture("metadata_schedulers.ex", path, 1, 1)
+    assert status == 0, output
+
+    assert output =~
+             "held storage yields both dirty scheduler pools; read cancellation and write settlement hold"
   end
 
   defp run_fixture(fixture, path, cpu_schedulers \\ 2, io_schedulers \\ 1) do

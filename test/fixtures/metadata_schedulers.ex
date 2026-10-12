@@ -5,20 +5,20 @@ alias LanceDB.{
   Branch,
   Connection,
   Error,
+  Execution,
   History,
   Index,
   Maintenance,
   Metadata,
   ObjectStoreFixture,
+  Query,
   Schema,
   Table
 }
 
 [database] = System.argv()
 assert :erlang.system_info(:dirty_cpu_schedulers_online) == 1
-# One I/O thread waits in the metadata NIF; leave another for fixture/test I/O,
-# including lazy BEAM module loading. Only the CPU pool is under test here.
-assert :erlang.system_info(:dirty_io_schedulers) == 2
+assert :erlang.system_info(:dirty_io_schedulers) == 1
 
 {:ok, conn} = Connection.connect(database)
 
@@ -91,6 +91,11 @@ try do
     {:schema_metadata, fn -> Metadata.schema(consistent) end, :ok},
     {:get_schema_json, fn -> Table.schema(consistent) end, :ok},
     {:table_stats, fn -> Maintenance.stats(consistent) end, :ok},
+    {:cache_stats, fn -> Table.cache_stats(consistent) end, :ok},
+    {:count_rows, fn -> Table.count_rows(consistent, "id > 0") end, :ok},
+    {:query_explain, fn -> consistent |> Query.new() |> Query.explain() end, :ok},
+    {:query_analyze, fn -> consistent |> Query.new() |> Query.analyze() end, :ok},
+    {:query_schema, fn -> consistent |> Query.new() |> Query.schema() end, :ok},
     {:drop_table, fn -> Connection.drop_table(remote_conn, "missing") end, :ok},
     {:table_names, fn -> Connection.table_names(remote_conn) end, :ok}
   ]
@@ -112,6 +117,9 @@ try do
 
       assert match?({:ok, {:ok, [%{"id" => 7}]}}, result),
              "#{operation} occupied the only dirty CPU scheduler: #{inspect(result)}"
+
+      io = Task.async(fn -> File.read(__ENV__.file) end)
+      assert {:ok, {:ok, _}} = Task.yield(io, 2_000)
 
       assert Task.yield(pending, 0) == nil
     after
@@ -139,7 +147,40 @@ try do
     ObjectStoreFixture.release(server)
   end
 
-  IO.puts("held storage leaves dirty CPU work available")
+  # One-shot reads cancel on caller death and release admission before storage
+  # resumes. Mutations retain their slot until their SDK future has settled.
+  assert {:ok, :ok} = Execution.configure(reads: 1)
+  flush_notifications.(flush_notifications)
+  :ok = ObjectStoreFixture.hold(server, :all)
+  {caller, monitor} = spawn_monitor(fn -> Table.count_rows(consistent) end)
+  assert_receive {^server, :blocked, _}, 5_000
+  assert {:error, %Error{kind: :busy}} = Table.count_rows(local)
+  Process.exit(caller, :kill)
+  assert_receive {:DOWN, ^monitor, :process, ^caller, :killed}, 2_000
+
+  LanceDB.TestSupport.assert_eventually(fn ->
+    Table.count_rows(local) == {:ok, 11}
+  end)
+
+  :ok = ObjectStoreFixture.release(server)
+  assert {:ok, :ok} = Execution.configure(writes: 1)
+  flush_notifications.(flush_notifications)
+  :ok = ObjectStoreFixture.hold(server, :all)
+  {caller, monitor} = spawn_monitor(fn -> History.update_tag(remote, "missing", 1) end)
+  assert_receive {^server, :blocked, _}, 5_000
+  assert {:error, %Error{kind: :busy}} = History.update_tag(local, "missing", 1)
+  Process.exit(caller, :kill)
+  assert_receive {:DOWN, ^monitor, :process, ^caller, :killed}, 2_000
+  assert {:error, %Error{kind: :busy}} = History.update_tag(local, "missing", 1)
+  :ok = ObjectStoreFixture.release(server)
+
+  LanceDB.TestSupport.assert_eventually(fn ->
+    match?({:error, %Error{kind: :not_found}}, History.update_tag(local, "missing", 1))
+  end)
+
+  IO.puts(
+    "held storage yields both dirty scheduler pools; read cancellation and write settlement hold"
+  )
 after
   ObjectStoreFixture.release(server)
   GenServer.stop(server)

@@ -1,21 +1,24 @@
 //! Shallow cloning and the pinned SDK's clone/open and URI compatibility rules.
 use crate::error::Failure;
-use crate::resources::{ConnectionResource, TableResource, RUNTIME};
+use crate::resources::{ConnectionResource, TableResource};
 use crate::table_open::OpenOptions;
 use lance::dataset::refs::Ref;
-use rustler::ResourceArc;
+use rustler::{Atom, Env, ResourceArc, Term};
 use std::sync::Arc;
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn clone_table(
+    env: Env<'_>,
     conn: ResourceArc<ConnectionResource>,
     name: String,
     source_uri: String,
     version: Option<u64>,
     tag: Option<String>,
-) -> Result<ResourceArc<TableResource>, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         let target_uri = clone_uri(conn.conn.uri(), conn.config.uri(), &name)?;
         let source_ref = match (version, tag) {
             (Some(version), None) => Ref::Version(None, Some(version)),

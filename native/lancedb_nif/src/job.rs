@@ -40,11 +40,15 @@ impl JobResource {
         result.clone().unwrap()
     }
 }
-#[rustler::nif(schedule = "DirtyIo")]
-fn job_status(job: ResourceArc<JobResource>) -> Result<String, Failure> {
-    RUNTIME
-        .block_on(job.job.status())
-        .map_err(Failure::from_error)
+#[rustler::nif]
+fn job_status(
+    env: Env<'_>,
+    job: ResourceArc<JobResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::settle(env, reference, async move {
+        job.job.status().await.map_err(Failure::from_error)
+    })
 }
 #[rustler::nif]
 fn job_wait(
@@ -68,10 +72,14 @@ fn job_wait(
     });
     Ok(atoms::ok())
 }
-#[rustler::nif(schedule = "DirtyIo")]
-fn job_cancel(job: ResourceArc<JobResource>) -> Result<Atom, Failure> {
-    RUNTIME
-        .block_on(job.job.cancel())
-        .map_err(Failure::from_error)?;
-    Ok(atoms::ok())
+#[rustler::nif]
+fn job_cancel(
+    env: Env<'_>,
+    job: ResourceArc<JobResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::settle(env, reference, async move {
+        job.job.cancel().await.map_err(Failure::from_error)?;
+        Ok(atoms::ok())
+    })
 }

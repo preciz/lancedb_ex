@@ -1,49 +1,48 @@
 use crate::analyzer::{fts_builder, FtsAnalyzer};
 use crate::error::Failure;
-use crate::resources::{atoms, TableResource, RUNTIME};
+use crate::resources::{atoms, TableResource};
 use lance::index::DatasetIndexExt;
 use lancedb::DistanceType;
-use rustler::{Atom, ResourceArc};
+use rustler::{Atom, Env, ResourceArc, Term};
 
 /// One bounded readiness observation. The BEAM caller owns polling and sleeps;
 /// no native admission slot or dirty scheduler is occupied between observations.
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn index_readiness(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     names: Vec<String>,
     timeout_ms: u64,
-) -> Result<Vec<String>, Failure> {
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
     if names.is_empty() || timeout_ms == 0 || timeout_ms > 7_200_000 {
         return Err("Index names and a positive timeout of at most two hours are required".into());
     }
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
-        crate::execution::ExecutionOptions {
-            timeout_ms: Some(timeout_ms as u32),
-        }
-        .run(async {
-            let indices = table
-                .table
-                .list_indices()
-                .await
-                .map_err(Failure::from_error)?;
-            let mut pending = Vec::new();
-            for name in names {
-                if indices.iter().any(|index| index.name == name) {
-                    let stats = table
-                        .table
-                        .index_stats(&name)
-                        .await
-                        .map_err(Failure::from_error)?;
-                    if stats.is_some_and(|stats| stats.num_unindexed_rows == 0) {
-                        continue;
-                    }
+    let deadline = crate::execution::ExecutionOptions {
+        timeout_ms: Some(timeout_ms as u32),
+    }
+    .deadline();
+    crate::read_task::spawn(env, reference, deadline, async move {
+        let indices = table
+            .table
+            .list_indices()
+            .await
+            .map_err(Failure::from_error)?;
+        let mut pending = Vec::new();
+        for name in names {
+            if indices.iter().any(|index| index.name == name) {
+                let stats = table
+                    .table
+                    .index_stats(&name)
+                    .await
+                    .map_err(Failure::from_error)?;
+                if stats.is_some_and(|stats| stats.num_unindexed_rows == 0) {
+                    continue;
                 }
-                pending.push(name);
             }
-            Ok(pending)
-        })
-        .await
+            pending.push(name);
+        }
+        Ok(pending)
     })
 }
 
@@ -144,12 +143,15 @@ fn index_builder(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn create_index(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     column: String,
     options: String,
+    reference: Term<'_>,
 ) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         crate::compat::fts::index(index_builder(&table.table, column, options)?.execute()).await?;
         Ok(atoms::created())
     })
@@ -157,12 +159,13 @@ fn create_index(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn create_index_async(
+    env: Env<'_>,
     table: ResourceArc<TableResource>,
     column: String,
     options: String,
-) -> Result<ResourceArc<crate::job::JobResource>, Failure> {
-    RUNTIME.block_on(async {
-        let permit = crate::execution::Permit::write()?;
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
         let job = crate::compat::fts::index(
             index_builder(&table.table, column, options)?.execute_async(),
         )
@@ -171,10 +174,13 @@ fn create_index_async(
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn list_indices(table_res: ResourceArc<TableResource>) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn list_indices(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let indices = table_res
             .table
             .list_indices()
@@ -189,10 +195,14 @@ fn list_indices(table_res: ResourceArc<TableResource>) -> Result<String, Failure
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn index_stats(table_res: ResourceArc<TableResource>, name: String) -> Result<String, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn index_stats(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         let stats = table_res
             .table
             .index_stats(name.clone())
@@ -229,10 +239,16 @@ fn index_stats(table_res: ResourceArc<TableResource>, name: String) -> Result<St
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn drop_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::write()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn drop_index(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+
         table_res
             .table
             .drop_index(&name)
@@ -242,10 +258,14 @@ fn drop_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Ato
     })
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
-fn prewarm_index(table_res: ResourceArc<TableResource>, name: String) -> Result<Atom, Failure> {
-    RUNTIME.block_on(async {
-        let _permit = crate::execution::Permit::read()?;
+#[rustler::nif(schedule = "DirtyCpu")]
+fn prewarm_index(
+    env: Env<'_>,
+    table_res: ResourceArc<TableResource>,
+    name: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::read(env, reference, async move {
         table_res
             .table
             .prewarm_index(&name)
