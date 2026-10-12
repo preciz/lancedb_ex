@@ -194,7 +194,7 @@ training loss. It does not measure search recall.
 
 `Index.wait/3` observes each name until the index exists with zero unindexed
 rows. The default timeout is 60 seconds. The maximum is two hours. The
-default polling interval is one second. A timeout returns
+default polling interval is one second; its maximum is 60 seconds. A timeout returns
 `Error.kind == :timeout` with `details.pending_indexes`. Other inspection
 errors, including admission saturation, return immediately.
 

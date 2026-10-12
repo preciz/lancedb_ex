@@ -79,7 +79,8 @@ IO.inspect(matches)
 ```
 
 Result rows have string keys. Vector search adds a numeric `"_distance"`
-field. Operations return `{:ok, value}` or `{:error, %LanceDB.Error{}}`.
+field. Database operations return `{:ok, value}` or `{:error, %LanceDB.Error{}}`.
+Builders and in-memory inspection helpers return their values directly.
 Incorrect API arguments raise `ArgumentError`.
 
 Version `0.1.1` also supports connection and table-open deadlines, cache

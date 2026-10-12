@@ -64,8 +64,9 @@ close. If no slot is available, the operation returns `:busy`. Separate
 write slots let cursors supply data to ingestion. These settings limit
 concurrent operations. They do not limit memory for each query.
 
-Telemetry covers all public operations. Start and stop events share an
-operation ID. Failures use stable error kinds.
+Database execution emits telemetry spans. Builders and direct in-memory
+inspection helpers do not. Start and stop events share an operation ID.
+Failures use stable error kinds.
 
 ## Quick start
 
@@ -145,7 +146,7 @@ Table creation defaults to `mode: :create`. This mode fails if the table
 exists. `mode: :exist_ok` opens an existing table without appending the
 supplied records. `mode: :overwrite` replaces the table.
 
-Operations return `{:ok, value}` or `{:error, reason}`. Invalid search
+Database operations return `{:ok, value}` or `{:error, reason}`. Invalid search
 options or creation modes raise `ArgumentError`. Malformed records return
 an error tuple. Table inspection returns logical `%LanceDB.Schema{}` values.
 Query and batch inspection return `%LanceDB.ArrowSchema{}` descriptions.

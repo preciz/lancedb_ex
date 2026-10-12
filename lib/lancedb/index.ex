@@ -11,9 +11,9 @@ defmodule LanceDB.Index do
   Waits until every named index exists and has zero unindexed rows.
 
   Accepts a name or non-empty list of names. Options: `:timeout_ms` (default
-  60_000, maximum two hours) and `:poll_interval_ms` (default 1_000). Both must
-  be positive integers. Returns `{:ok, :ready}` or a timeout Error containing
-  `details.pending_indexes`. Other inspection errors propagate immediately.
+  60_000, maximum two hours) and `:poll_interval_ms` (default 1_000, maximum
+  60_000). Both must be positive integers. Returns `{:ok, :ready}` or a timeout
+  Error containing `details.pending_indexes`. Other inspection errors propagate immediately.
 
   This follows the SDK's readiness semantics: each name must be observed ready
   once. Concurrent writes or index replacement can invalidate that observation.
