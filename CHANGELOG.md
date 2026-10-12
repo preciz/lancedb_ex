@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Normalize native metrics recorder installation failures to `LanceDB.Error`,
+  matching `Telemetry.enable_native_metrics/0`'s documented return type.
 - Add opt-in, application-supervised `LanceDB.TableCache`: shared table opens,
   retained sessions, bounded background multi-index warming, LRU/idle eviction,
   explicit invalidation, status and telemetry. Track table version and index UUID

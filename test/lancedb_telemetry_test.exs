@@ -89,4 +89,39 @@ defmodule LanceDB.TelemetryTest do
       assert next["measurements"]["value"] >= point["measurements"]["value"]
     end
   end
+
+  test "native recorder installation failures return structured errors" do
+    # The recorder cannot be reset or replaced through the public API. Stub only
+    # the NIF boundary in a child VM, keeping the real backend and public wrapper.
+    code = """
+    Code.compiler_options(ignore_module_conflict: true)
+    defmodule LanceDB.Native do
+      def metrics_enable do
+        {:error, %{
+          kind: :invalid_data,
+          message: "Another native metrics recorder is already installed",
+          details: %{}
+        }}
+      end
+    end
+
+    {:error, %LanceDB.Error{
+      kind: :invalid_data,
+      operation: :enable_native_metrics,
+      message: "Another native metrics recorder is already installed",
+      details: %{}
+    }} = LanceDB.Telemetry.enable_native_metrics()
+    IO.puts("native recorder failure normalized")
+    """
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("elixir"),
+        ["--erl", "+S 2:2", "-pa", Path.join(Mix.Project.build_path(), "lib/*/ebin"), "-e", code],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "native recorder failure normalized"
+  end
 end

@@ -213,6 +213,7 @@ Attribute labels can contain storage paths. Use `catalog/0` to discover
 metric names and units. New series appear as operations run.
 
 You cannot disable or reset the native recorder. You can install it again
-without changes. A conflicting native recorder returns an error. Schedule
+without changes. A conflicting native recorder returns `{:error, %LanceDB.Error{}}`
+with operation `:enable_native_metrics`. Schedule
 `poll/0` with your own process or telemetry_poller. The package does not
 start a polling process.

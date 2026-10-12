@@ -34,12 +34,16 @@ defmodule LanceDB.Telemetry do
   """
   alias LanceDB.Backend
 
-  @doc "Installs the native recorder, returning `:ok` even if already installed."
+  @doc """
+  Installs the native recorder, returning `:ok` even if already installed.
+  An incompatible existing recorder returns `{:error, %LanceDB.Error{}}`
+  with operation `:enable_native_metrics`.
+  """
   @spec enable_native_metrics() :: :ok | {:error, LanceDB.Error.t()}
   def enable_native_metrics do
     case Backend.metrics_enable() do
       {:ok, true} -> :ok
-      error -> error
+      {:error, reason} -> {:error, LanceDB.Error.normalize(reason, :enable_native_metrics)}
     end
   end
 
