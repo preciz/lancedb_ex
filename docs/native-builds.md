@@ -202,8 +202,8 @@ Review `CHANGELOG.md` and the generated documentation too.
 After all checks pass, tag the package source and publish to Hex:
 
 ```sh
-git tag -a v0.1.1 -m "Release v0.1.1"
-git push origin main v0.1.1
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin main v0.2.0
 env -u LANCEDB_BUILD mix hex.publish
 ```
 

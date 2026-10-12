@@ -2,16 +2,27 @@
 
 ## Unreleased
 
-- Normalize native metrics recorder installation failures to `LanceDB.Error`,
-  matching `Telemetry.enable_native_metrics/0`'s documented return type.
 - Add opt-in, application-supervised `LanceDB.TableCache`: shared table opens,
   retained sessions, bounded background multi-index warming, LRU/idle eviction,
   explicit invalidation, status and telemetry. Track table version and index UUID
   so changed indexes can be warmed again; discard stale task results.
-- Remove the obsolete pre-release migration guide and redundant table type aliases.
 - Move blocking table/index inspection, index prewarming and deletion, and table
   listing/deletion to dirty I/O schedulers so storage waits leave dirty CPU
   schedulers available. Requires a new native build for precompiled installations.
+- Normalize native metrics recorder installation failures to `LanceDB.Error`,
+  matching `Telemetry.enable_native_metrics/0`'s documented return type.
+- Add typespecs for every public library function, checked by a regression test.
+- Reject stale selected native builds in CI before compilation, requiring matching
+  immutable build and checksum manifests for committed native changes.
+- Extend anonymous package and production-release checks with supervised caching,
+  background warming of two FTS indexes, and query reuse of warmed caches.
+- Remove the obsolete pre-release migration guide.
+
+### Breaking changes
+
+- Remove redundant `t/0` aliases from `LanceDB.Branch`, `LanceDB.History`,
+  `LanceDB.Maintenance`, `LanceDB.Metadata`, and `LanceDB.SchemaEvolution`.
+  Use `t:LanceDB.Table.t/0` for table handles.
 
 ## 0.1.1
 

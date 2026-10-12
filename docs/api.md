@@ -112,7 +112,7 @@ waits, and writer cleanup run native waits on Tokio and reply by message,
 leaving BEAM schedulers available. Many other native calls use dirty schedulers
 and can retain one while waiting for storage.
 
-The current source accepts `:timeout_ms` and session cache budgets in the third
+Connections accept `:timeout_ms` and session cache budgets in the third
 argument to `connect/3`. Table opening accepts its own deadline and per-open
 cache budgets. See [table-open controls](tables.md#table-open-controls-and-listing)
 for options, cancellation limits, and `Table.cache_stats/1`.
@@ -189,7 +189,7 @@ The optional table cache emits operation spans for `cache_fetch`,
 `generation`, and `index_names`. It also emits per-index completion/failure and
 entry eviction events; see [cache telemetry](table-cache.md#telemetry).
 
-For the current source's per-session index and metadata cache counters, use
+For per-session index and metadata cache counters, use
 `LanceDB.Table.cache_stats/1`. It requires no metrics recorder and reports the
 session actually used by the table. See [cache statistics](tables.md#table-open-controls-and-listing)
 for shared-session scope and fields. The following metrics instead accumulate
