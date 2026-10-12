@@ -65,18 +65,19 @@ release.
 ### Current native build
 
 The selected native build is
-[`0.0.0+9b2592dec2a10c98b9e03913293126af4d0ba002`](https://github.com/preciz/lancedb_ex/releases/tag/native-9b2592dec2a10c98b9e03913293126af4d0ba002).
+[`0.0.0+34de6e78a241d5776a072fff6d20c1ce8d856929`](https://github.com/preciz/lancedb_ex/releases/tag/native-34de6e78a241d5776a072fff6d20c1ce8d856929).
 Its exact source revision is
-[`9b2592dec2a10c98b9e03913293126af4d0ba002`](https://github.com/preciz/lancedb_ex/commit/9b2592dec2a10c98b9e03913293126af4d0ba002).
-It uses SDK `0.37.1` and NIF ABI `2.15`, and includes the `0.1.1` native APIs.
+[`34de6e78a241d5776a072fff6d20c1ce8d856929`](https://github.com/preciz/lancedb_ex/commit/34de6e78a241d5776a072fff6d20c1ce8d856929).
+It uses SDK `0.37.1` and NIF ABI `2.15`, and includes the scheduler fix shipped in `0.2.0`.
 
 Both Linux targets passed their Rust and Elixir tests. The
-[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38165390696)
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38255855355)
 also checked fresh consumers on both targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
 and completed a write and query without Rust or credentials. The checks also
 verified connect/open deadlines, initial connection cache budgets, cache
-statistics, and a production application release on each target.
+statistics, supervised caching, background warming of two FTS indexes, shared-cache
+FTS queries, and a production application release on each target.
 
 To use the released source with its verified archives, pin the Git dependency:
 

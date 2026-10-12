@@ -10,7 +10,7 @@ The Elixir package version is `0.2.0`. The Rust software development kit
 (SDK) is pinned to `0.37.1`. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
 public download and production release checks on both supported Linux targets,
-including the new connection deadlines and cache APIs.
+including supervised table caching, background FTS warming, and shared cache reuse.
 
 ## Requirements
 

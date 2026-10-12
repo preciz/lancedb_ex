@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Add opt-in, application-supervised `LanceDB.TableCache`: shared table opens,
   retained sessions, bounded background multi-index warming, LRU/idle eviction,
@@ -8,7 +8,7 @@
   so changed indexes can be warmed again; discard stale task results.
 - Move blocking table/index inspection, index prewarming and deletion, and table
   listing/deletion to dirty I/O schedulers so storage waits leave dirty CPU
-  schedulers available. Requires a new native build for precompiled installations.
+  schedulers available.
 - Normalize native metrics recorder installation failures to `LanceDB.Error`,
   matching `Telemetry.enable_native_metrics/0`'s documented return type.
 - Add typespecs for every public library function, checked by a regression test.
@@ -17,6 +17,9 @@
 - Extend anonymous package and production-release checks with supervised caching,
   background warming of two FTS indexes, and query reuse of warmed caches.
 - Remove the obsolete pre-release migration guide.
+
+This release selects new verified native binaries for Linux x86_64 and ARM64.
+LanceDB SDK 0.37.1 and platform requirements are unchanged.
 
 ### Breaking changes
 
