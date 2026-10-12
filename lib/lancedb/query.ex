@@ -100,11 +100,23 @@ defmodule LanceDB.Query do
   The only stream option is `:batch_size` (default 1024); query controls belong
   to the query value. Batches bound returned rows, not query memory. Ending or
   halting enumeration closes the cursor and releases its read admission slot.
+
+  The process that begins enumeration opens and owns the cursor. You may build
+  the lazy stream in one process and enumerate it in another. Resume suspended
+  enumeration in its original process; an active cursor cannot be transferred
+  to another process. Owner exit cancels the cursor.
   """
   @spec stream(t(), keyword()) :: Enumerable.t()
   def stream(%__MODULE__{} = query, opts \\ []), do: read_stream(query, opts, :rows)
 
-  @doc "Builds a lazy stream of native Arrow batches. Use Source.batches for schema-compatible ingestion."
+  @doc """
+  Builds a lazy stream of native Arrow batches. Use Source.batches for
+  schema-compatible ingestion.
+
+  Each enumeration opens a cursor owned by the enumerating process, as with
+  `stream/2`. Resume suspended enumeration in that same process. Owner exit
+  cancels the cursor.
+  """
   @spec stream_batches(t(), keyword()) :: Enumerable.t()
   def stream_batches(%__MODULE__{} = query, opts \\ []), do: read_stream(query, opts, :batches)
   @doc "Explains this query without executing it."

@@ -93,7 +93,10 @@ same stream again starts a new execution. That execution can read newer data
 according to the handle's read-consistency settings. One process can create
 a stream that another process reads.
 
-Resume a suspended stream read in the process that started it.
+The process that begins enumeration opens and owns the cursor. Resume a
+suspended stream read in that process; transferring an active cursor to another
+process fails when it requests another native batch. This applies to both row
+streams and `Query.stream_batches/2`.
 
 Database errors raise `LanceDB.Error` when the caller reads the stream. A
 cursor closes when its stream ends or stops early, for example with
