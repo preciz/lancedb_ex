@@ -13,7 +13,9 @@ defmodule LanceDB.Execution do
   input and awaits the native result; cancellation never promises rollback after
   final commit has begun. No table process or connection pool is created.
   """
+  @type write_input(value) :: {:ok, value} | {:error, LanceDB.Error.reason()}
   @doc "Sets positive read and write concurrency limits across the BEAM VM. Omitted limits revert to their defaults, 64 reads and 16 writes."
+  @spec configure(keyword()) :: {:ok, :ok}
   def configure(opts) do
     opts = Keyword.validate!(opts, [:reads, :writes])
     reads = Keyword.get(opts, :reads, 64)
@@ -26,6 +28,7 @@ defmodule LanceDB.Execution do
   end
 
   @doc false
+  @spec run(atom(), (-> value), map()) :: value | {:error, LanceDB.Error.t()} when value: var
   def run(operation, fun, metadata \\ %{}) do
     LanceDB.Telemetry.span(
       operation,
@@ -40,6 +43,9 @@ defmodule LanceDB.Execution do
   end
 
   @doc false
+  @spec write(atom(), (-> write_input(input)), (input, atom() -> output)) ::
+          LanceDB.result(output)
+        when input: var, output: var
   def write(operation, fun, decode) do
     run(operation, fn ->
       case fun.() do

@@ -18,9 +18,12 @@ defmodule LanceDB.Blob do
   @enforce_keys [:resource]
   defstruct [:resource]
   @opaque t :: %__MODULE__{resource: reference()}
+  @type byte_range :: {non_neg_integer(), non_neg_integer()}
+  @type request :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}
   @max_uint64 18_446_744_073_709_551_615
 
   @doc "Returns blob column paths in schema order, including dotted paths for nested blobs."
+  @spec columns(LanceDB.Table.t()) :: LanceDB.result([String.t()])
   def columns(table),
     do: LanceDB.Execution.run(:blob_columns, fn -> Backend.blob_columns(table) end)
 
@@ -32,6 +35,8 @@ defmodule LanceDB.Blob do
   Invalid/missing IDs fail. Use range reads or file
   handles to limit memory for large payloads.
   """
+  @spec fetch(LanceDB.Table.t(), atom() | String.t(), [non_neg_integer()]) ::
+          LanceDB.result([binary() | nil])
   def fetch(table, column, row_ids) do
     LanceDB.Execution.run(:fetch_blobs, fn ->
       Backend.fetch_blobs(
@@ -43,6 +48,8 @@ defmodule LanceDB.Blob do
   end
 
   @doc "Reads `{row_id, offset, length}` blob ranges in request order, preserving nulls. Ranges must fit each blob."
+  @spec fetch_ranges(LanceDB.Table.t(), atom() | String.t(), [request()]) ::
+          LanceDB.result([binary() | nil])
   def fetch_ranges(table, column, requests) do
     LanceDB.Execution.run(:fetch_blob_ranges, fn ->
       Backend.fetch_blob_ranges(
@@ -54,6 +61,8 @@ defmodule LanceDB.Blob do
   end
 
   @doc "Opens seekable `LanceDB.Blob` handles in row ID order; null values return nil."
+  @spec open(LanceDB.Table.t(), atom() | String.t(), [non_neg_integer()]) ::
+          LanceDB.result([t() | nil])
   def open(table, column, row_ids) do
     LanceDB.Execution.run(:fetch_blob_files, fn ->
       Backend.fetch_blob_files(
@@ -65,18 +74,22 @@ defmodule LanceDB.Blob do
   end
 
   @doc "A blob write value naming an external object URI. Writes retain the reference by default; external_blob_mode: :ingest copies its bytes."
+  @spec reference(String.t()) :: LanceDB.Blob.Reference.t()
   def reference(uri), do: %LanceDB.Blob.Reference{uri: Options.string!(uri, "blob URI")}
 
   @doc "Reads from the current cursor to EOF, advancing the cursor."
+  @spec read(t()) :: LanceDB.result(binary())
   def read(%__MODULE__{} = blob),
     do: Execution.run(:blob_read, fn -> Backend.blob_read(blob, nil) end)
 
   @doc "Reads up to length bytes and advances the cursor. EOF returns an empty binary."
+  @spec read(t(), non_neg_integer()) :: LanceDB.result(binary())
   def read(%__MODULE__{} = blob, length) do
     Execution.run(:blob_read, fn -> Backend.blob_read(blob, uint64!(length, "length")) end)
   end
 
   @doc "Reads exactly length bytes at offset without moving the cursor. Out-of-bounds ranges fail."
+  @spec read_range(t(), non_neg_integer(), non_neg_integer()) :: LanceDB.result(binary())
   def read_range(%__MODULE__{} = blob, offset, length) do
     Execution.run(:blob_read_range, fn ->
       with {:ok, [bytes]} <- Backend.blob_read_ranges(blob, [range!({offset, length})]),
@@ -85,6 +98,7 @@ defmodule LanceDB.Blob do
   end
 
   @doc "Reads `{offset, length}` ranges in input order without moving the cursor."
+  @spec read_ranges(t(), [byte_range()]) :: LanceDB.result([binary()])
   def read_ranges(%__MODULE__{} = blob, ranges) do
     Execution.run(:blob_read_ranges, fn ->
       Backend.blob_read_ranges(blob, list!(ranges, &range!/1, "ranges"))
@@ -92,25 +106,31 @@ defmodule LanceDB.Blob do
   end
 
   @doc "Sets the cursor's absolute byte offset. Seeking beyond EOF is allowed."
+  @spec seek(t(), non_neg_integer()) :: LanceDB.result(:ok)
   def seek(%__MODULE__{} = blob, offset),
     do: Execution.run(:blob_seek, fn -> Backend.blob_seek(blob, uint64!(offset, "offset")) end)
 
   @doc "Returns the current cursor offset."
+  @spec tell(t()) :: LanceDB.result(non_neg_integer())
   def tell(%__MODULE__{} = blob),
     do: Execution.run(:blob_tell, fn -> Backend.blob_tell(blob) end)
 
   @doc "Returns the byte length; remains available after close."
+  @spec size(t()) :: non_neg_integer()
   def size(%__MODULE__{} = blob), do: Backend.blob_size(blob)
 
   @doc "Returns storage metadata with string keys: size, position, data_path, kind, and uri."
+  @spec info(t()) :: LanceDB.result(map())
   def info(%__MODULE__{} = blob),
     do: Execution.run(:blob_info, fn -> {:ok, JSON.decode!(Backend.blob_info(blob))} end)
 
   @doc "Closes the shared handle, returning `{:ok, :ok}`. Repeated closes succeed."
+  @spec close(t()) :: LanceDB.result(:ok)
   def close(%__MODULE__{} = blob),
     do: Execution.run(:blob_close, fn -> Backend.blob_close(blob) end)
 
   @doc "Whether the shared handle is closed."
+  @spec closed?(t()) :: boolean()
   def closed?(%__MODULE__{} = blob), do: Backend.blob_is_closed(blob)
 
   @doc """
@@ -119,6 +139,7 @@ defmodule LanceDB.Blob do
   `LanceDB.Error` on failure. It borrows the handle: halting does not close it.
   Each chunk performs a bounded range read; repeated enumeration is supported.
   """
+  @spec stream(t(), keyword()) :: Enumerable.t()
   def stream(%__MODULE__{} = blob, opts \\ []) do
     opts = Keyword.validate!(opts, [:chunk_size])
     chunk_size = uint64!(Keyword.get(opts, :chunk_size, 65_536), "chunk_size")
@@ -140,9 +161,11 @@ defmodule LanceDB.Blob do
   end
 
   @doc false
+  @spec row_ids!(term()) :: [non_neg_integer()]
   def row_ids!(ids), do: list!(ids, &uint64!(&1, "row ID"), "row IDs")
 
   @doc false
+  @spec requests!(term()) :: [request()]
   def requests!(requests), do: list!(requests, &request!/1, "blob range requests")
 
   defp request!({id, offset, length}) do

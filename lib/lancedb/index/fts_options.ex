@@ -1,8 +1,10 @@
 defmodule LanceDB.Index.FTSOptions do
   @moduledoc false
   @keys [:block_size, :memory_limit_mb, :num_workers, :format_version]
+  @spec keys() :: [atom()]
   def keys, do: @keys
 
+  @spec parse!(keyword(), atom()) :: map()
   def parse!(opts, type) do
     values = Keyword.take(opts, @keys)
 

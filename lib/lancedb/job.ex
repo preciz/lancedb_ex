@@ -10,6 +10,7 @@ defmodule LanceDB.Job do
   @opaque t :: %__MODULE__{resource: reference()}
 
   @doc "Returns the native status: running, finished, failed, or cancelled."
+  @spec status(t()) :: LanceDB.result(String.t())
   def status(%__MODULE__{} = job),
     do: LanceDB.Execution.run(:job_status, fn -> LanceDB.Backend.job_status(job) end)
 
@@ -20,6 +21,7 @@ defmodule LanceDB.Job do
   the job running. Native waits use Tokio and reply without retaining a BEAM
   scheduler. A completed result is available to subsequent waits.
   """
+  @spec wait(t(), keyword()) :: LanceDB.result(:created)
   def wait(%__MODULE__{} = job, opts \\ []) do
     opts = Keyword.validate!(opts, [:timeout_ms])
     timeout = opts[:timeout_ms]
@@ -31,6 +33,7 @@ defmodule LanceDB.Job do
   end
 
   @doc "Requests cancellation. Call wait/2 to observe the terminal result."
+  @spec cancel(t()) :: LanceDB.result(:ok)
   def cancel(%__MODULE__{} = job),
     do: LanceDB.Execution.run(:job_cancel, fn -> LanceDB.Backend.job_cancel(job) end)
 end

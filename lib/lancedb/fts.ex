@@ -158,6 +158,7 @@ defmodule LanceDB.FTS do
   defp json_scalar!(_), do: raise(ArgumentError, "JSON query values must be scalars")
 
   @doc false
+  @spec query!(input()) :: String.t() | map()
   def query!(%__MODULE__{query: query}), do: query
   def query!(text), do: text!(text)
 

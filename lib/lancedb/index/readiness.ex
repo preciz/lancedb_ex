@@ -2,6 +2,8 @@ defmodule LanceDB.Index.Readiness do
   @moduledoc false
   alias LanceDB.{Backend, Error, Options}
 
+  @spec wait(LanceDB.Table.t(), atom() | String.t() | [atom() | String.t()], keyword()) ::
+          LanceDB.Native.result(:ready) | {:error, Error.t()}
   def wait(table, names, opts) do
     opts = Keyword.validate!(opts, [:timeout_ms, :poll_interval_ms])
     names = names |> List.wrap() |> Options.column_names!()

@@ -2,6 +2,13 @@ defmodule LanceDB.Stream do
   @moduledoc false
   alias LanceDB.Query.Executor
 
+  @spec from_plan(
+          LanceDB.Table.t(),
+          LanceDB.Query.Plan.t(),
+          pos_integer(),
+          :rows | :batches,
+          map()
+        ) :: Enumerable.t()
   def from_plan(table, plan, batch_size, mode, parent \\ %{}) do
     Stream.resource(
       fn ->

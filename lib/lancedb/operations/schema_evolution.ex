@@ -4,6 +4,8 @@ defmodule LanceDB.Operations.SchemaEvolution do
   alias LanceDB.{Backend, Batch, Ingestion, Options, Query, Schema}
   import LanceDB.Options, only: [column_name!: 1, column_names!: 1]
 
+  @spec add_columns(LanceDB.Table.t(), map() | list()) ::
+          LanceDB.Native.result(LanceDB.Native.version_output())
   def add_columns(table, expressions) do
     expressions = evolution_pairs!(expressions)
 
@@ -22,6 +24,8 @@ defmodule LanceDB.Operations.SchemaEvolution do
     Backend.add_columns(table, expressions)
   end
 
+  @spec alter_columns(LanceDB.Table.t(), map() | list()) ::
+          LanceDB.Native.result(LanceDB.Native.version_output())
   def alter_columns(table, changes) do
     changes = evolution_pairs!(changes)
 
@@ -46,6 +50,8 @@ defmodule LanceDB.Operations.SchemaEvolution do
     Backend.alter_columns(table, changes)
   end
 
+  @spec drop_columns(LanceDB.Table.t(), [atom() | String.t()]) ::
+          LanceDB.Native.result(LanceDB.Native.version_output())
   def drop_columns(table, columns) do
     columns = column_names!(columns)
     Backend.drop_columns(table, columns)
@@ -82,6 +88,9 @@ defmodule LanceDB.Operations.SchemaEvolution do
     name
   end
 
+  @spec columns(LanceDB.Table.t(), LanceDB.Source.t(), keyword()) ::
+          LanceDB.Backend.result(LanceDB.Backend.write_output())
+          | {:error, map() | LanceDB.Error.t() | String.t()}
   def columns(table, source, opts) do
     source = LanceDB.Source.coerce(source)
     if is_nil(source.schema), do: raise(ArgumentError, "column sources require a schema")
@@ -103,6 +112,14 @@ defmodule LanceDB.Operations.SchemaEvolution do
     )
   end
 
+  @spec backfill_columns(
+          LanceDB.Table.t(),
+          Schema.t() | list(),
+          (Batch.t() -> Batch.t() | [map()]),
+          keyword()
+        ) ::
+          LanceDB.Backend.result(LanceDB.Backend.write_output())
+          | {:error, map() | LanceDB.Error.t() | String.t()}
   def backfill_columns(table, schema, mapper, opts) when is_function(mapper, 1) do
     opts = Keyword.validate!(opts, [:read_columns, :batch_size])
     {size, opts} = Options.batch_size!(opts)

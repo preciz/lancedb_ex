@@ -4,6 +4,7 @@ defmodule LanceDB.Projection do
 
   @reserved ~w(_rowid _rowoffset _rowaddr _distance _score _relevance_score query_index)
 
+  @spec options!(keyword()) :: %{columns: [String.t()] | nil, select: [[String.t()]] | nil}
   def options!(opts) do
     columns = Keyword.get(opts, :columns)
     select = Keyword.get(opts, :select)

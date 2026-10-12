@@ -2,7 +2,15 @@ defmodule LanceDB.Ingestion.Plan do
   alias LanceDB.Blob.WriteOptions
   @moduledoc false
   defstruct [:options, :progress, :mode, :commit]
+
+  @type t :: %__MODULE__{
+          options: map(),
+          progress: {pid(), term()} | nil,
+          mode: :append | :overwrite,
+          commit: :once | :batch
+        }
   @sizes [:write_parallelism, :max_rows_per_file, :max_rows_per_group, :max_bytes_per_file]
+  @spec new(keyword()) :: t()
   def new(opts) do
     {commit, opts} = Keyword.pop(opts, :commit, :once)
     if commit not in [:batch, :once], do: raise(ArgumentError, "commit must be :batch or :once")

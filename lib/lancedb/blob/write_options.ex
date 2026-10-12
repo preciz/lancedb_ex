@@ -1,8 +1,10 @@
 defmodule LanceDB.Blob.WriteOptions do
   @moduledoc false
   @keys [:external_blob_mode, :allow_external_blob_outside_bases, :blob_pack_file_size_threshold]
+  @spec keys() :: [atom()]
   def keys, do: @keys
 
+  @spec validate!(keyword()) :: nil
   def validate!(opts) do
     mode = Keyword.get(opts, :external_blob_mode, :reference)
 

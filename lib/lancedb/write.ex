@@ -4,11 +4,14 @@ defmodule LanceDB.Write do
   import LanceDB.Options, only: [filter!: 1, column_name!: 1, column_names!: 1]
   alias LanceDB.{Backend, Ingestion, Records}
 
+  @spec delete(LanceDB.Table.t(), String.t() | LanceDB.Expr.t(), keyword()) ::
+          LanceDB.Native.result(LanceDB.Native.counts_output())
   def delete(table, predicate, opts) do
     Keyword.validate!(opts, [])
     Backend.delete_rows_result(table, filter!(predicate))
   end
 
+  @spec upsert_options!(keyword()) :: keyword()
   def upsert_options!(opts) do
     Keyword.validate!(opts, [:on, :timeout_ms, :use_index]) ++
       [when_matched_update_all: true, when_not_matched_insert_all: true]
@@ -73,6 +76,8 @@ defmodule LanceDB.Write do
   defp merge_action!(_),
     do: raise(ArgumentError, "merge actions must be booleans or non-empty SQL conditions")
 
+  @spec update(LanceDB.Table.t(), map(), keyword()) ::
+          LanceDB.Native.result(LanceDB.Native.counts_output())
   def update(table, changes, opts) do
     opts = Keyword.validate!(opts, [:filter])
     filter = filter!(Keyword.get(opts, :filter))
@@ -102,6 +107,9 @@ defmodule LanceDB.Write do
     end
   end
 
+  @spec merge(LanceDB.Table.t(), [map()] | LanceDB.Source.t(), keyword()) ::
+          LanceDB.Backend.result(LanceDB.Backend.write_output())
+          | {:error, map() | LanceDB.Error.t() | String.t()}
   def merge(table, source, opts) do
     {keys, wire} = merge_options!(opts)
     source = LanceDB.Source.coerce(source)

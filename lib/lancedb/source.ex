@@ -37,11 +37,13 @@ defmodule LanceDB.Source do
     do: %__MODULE__{kind: :batches, data: enumerable!(data), schema: schema!(opts)}
 
   @doc false
+  @spec coerce(t() | [map()]) :: t()
   def coerce(%__MODULE__{} = source), do: source
   def coerce(rows) when is_list(rows), do: rows(rows)
   def coerce(_), do: raise(ArgumentError, "input must be a row list or a LanceDB.Source")
 
   @doc false
+  @spec chunks(t()) :: Enumerable.t()
   def chunks(%__MODULE__{kind: :rows, data: data, batch_size: size}),
     do: Stream.chunk_every(data, size)
 
@@ -53,6 +55,7 @@ defmodule LanceDB.Source do
   end
 
   @doc false
+  @spec with_schema(t(), Schema.t() | list() | nil) :: t()
   def with_schema(%__MODULE__{} = source, nil), do: source
 
   def with_schema(%__MODULE__{} = source, schema) do
@@ -65,6 +68,8 @@ defmodule LanceDB.Source do
   end
 
   @doc false
+  @spec check_schema(LanceDB.Table.t(), t()) ::
+          :ok | {:error, LanceDB.Native.error() | LanceDB.Error.t() | JSON.decode_error_reason()}
   def check_schema(_table, %__MODULE__{schema: nil}), do: :ok
 
   def check_schema(table, %__MODULE__{schema: schema}) do

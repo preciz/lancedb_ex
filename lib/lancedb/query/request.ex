@@ -3,6 +3,7 @@ defmodule LanceDB.Query.Request do
   alias LanceDB.Query.{Controls, Definition, Plan}
 
   # Lower semantic values in one direction; no keyword reconstruction from requests.
+  @spec compile(Definition.t()) :: Plan.t()
   def compile(%Definition{source: source, controls: c}) do
     kind = if source == :scan, do: :scan, else: elem(source, 0)
     limit = Map.get(c, :limit, Controls.default_limit(kind))

@@ -4,6 +4,12 @@ defmodule LanceDB.SearchControls do
   @max_count 9_223_372_036_854_775_807
   @max_float 3.402_823_466_385_288_6e38
 
+  @spec read!(keyword(), non_neg_integer()) :: %{
+          offset: non_neg_integer(),
+          prefilter: boolean(),
+          fast_search: boolean(),
+          with_row_id: boolean()
+        }
   def read!(opts, limit) do
     offset = Keyword.get(opts, :offset, 0)
 
@@ -21,6 +27,11 @@ defmodule LanceDB.SearchControls do
     }
   end
 
+  @spec vector!(keyword()) :: %{
+          probes: %{minimum: pos_integer(), maximum: pos_integer() | nil} | nil,
+          distance_range: [float() | nil] | nil,
+          approx_mode: :fast | :normal | :accurate | nil
+        }
   def vector!(opts) do
     if Keyword.get(opts, :fast_search, false) and Keyword.get(opts, :bypass_vector_index, false),
       do: raise(ArgumentError, "fast_search and bypass_vector_index cannot both be true")

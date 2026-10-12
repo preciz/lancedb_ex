@@ -1,5 +1,7 @@
 defmodule LanceDB.Backend.ResultCodec do
   @moduledoc false
+  @spec decode(LanceDB.Native.result(String.t()), module(), :one | :many) ::
+          LanceDB.Native.result(struct() | [struct()])
   def decode({:ok, json}, module, cardinality) do
     value = JSON.decode!(json)
 

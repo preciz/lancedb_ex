@@ -3,8 +3,11 @@ defmodule LanceDB.Operations.Maintenance do
   @moduledoc false
   alias LanceDB.{Backend, Options, Result}
 
+  @spec table_stats(LanceDB.Table.t()) ::
+          LanceDB.Native.result(map()) | {:error, JSON.decode_error_reason()}
   def table_stats(table), do: Result.decode(Backend.table_stats(table))
 
+  @spec optimize_indices(LanceDB.Table.t(), keyword()) :: LanceDB.Native.result(:optimized)
   def optimize_indices(table, opts) do
     opts = Keyword.validate!(opts, [:index_names, :num_indices_to_merge, :retrain])
     validate_booleans!(opts, [:retrain])
@@ -31,6 +34,8 @@ defmodule LanceDB.Operations.Maintenance do
     :binary_copy_read_batch_bytes,
     :max_source_fragments
   ]
+  @spec compact_files(LanceDB.Table.t(), keyword()) ::
+          LanceDB.Native.result(LanceDB.Maintenance.Compaction.t())
   def compact_files(table, opts) do
     opts =
       Keyword.validate!(
@@ -67,6 +72,8 @@ defmodule LanceDB.Operations.Maintenance do
     )
   end
 
+  @spec cleanup_old_versions(LanceDB.Table.t(), keyword()) ::
+          LanceDB.Native.result(map()) | {:error, JSON.decode_error_reason()}
   def cleanup_old_versions(table, opts) do
     opts =
       Keyword.validate!(opts, [

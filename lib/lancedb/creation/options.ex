@@ -7,6 +7,7 @@ defmodule LanceDB.Creation.Options do
   @keys [:mode, :schema, :schema_metadata, :location, :storage_options, :data_storage_version] ++
           @sizes ++ @booleans ++ WriteOptions.keys()
 
+  @spec parse!(keyword()) :: keyword()
   def parse!(opts) do
     opts = Keyword.validate!(opts, @keys)
     WriteOptions.validate!(opts)
@@ -48,6 +49,7 @@ defmodule LanceDB.Creation.Options do
        do: raise(ArgumentError, "invalid data_storage_version")
   end
 
+  @spec native_options(keyword()) :: map()
   def native_options(opts) do
     opts
     |> Keyword.drop([:schema, :schema_metadata])
@@ -58,6 +60,7 @@ defmodule LanceDB.Creation.Options do
     |> Map.new()
   end
 
+  @spec open_options(keyword()) :: map()
   def open_options(opts),
     do: opts |> Keyword.take([:location, :storage_options]) |> Map.new()
 end

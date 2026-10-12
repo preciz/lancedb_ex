@@ -3,16 +3,27 @@ defmodule LanceDB.Query.Definition do
   alias LanceDB.Query.Controls
   @enforce_keys [:source]
   defstruct [:source, controls: %{}]
-  @type t :: %__MODULE__{source: term(), controls: map()}
 
+  @type source ::
+          :scan
+          | {:vector, [number()]}
+          | {:text, LanceDB.FTS.input()}
+          | {:hybrid, [number()], LanceDB.FTS.input()}
+          | {:batch | :multivector, [[number()]]}
+          | {:take, :row_ids | :row_offsets, [non_neg_integer()]}
+  @type t :: %__MODULE__{source: source(), controls: map()}
+
+  @spec new(source(), keyword()) :: t()
   def new(source, opts \\ []), do: update(%__MODULE__{source: source!(source)}, opts)
 
+  @spec update(t(), keyword()) :: t()
   def update(%__MODULE__{} = definition, opts) do
     controls = Map.merge(definition.controls, Controls.normalize!(opts))
     Controls.validate!(definition.source, controls)
     %{definition | controls: controls}
   end
 
+  @spec source(t(), source()) :: t()
   def source(%__MODULE__{} = definition, source) do
     source = source!(source)
     Controls.validate!(source, definition.controls)

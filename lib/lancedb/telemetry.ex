@@ -74,6 +74,7 @@ defmodule LanceDB.Telemetry do
   end
 
   @doc false
+  @spec span(atom(), (-> value), map()) :: value when value: var
   def span(operation, fun, metadata \\ %{}) do
     metadata =
       metadata

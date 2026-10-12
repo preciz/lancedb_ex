@@ -1,6 +1,7 @@
 defmodule LanceDB.Analyzer do
   @moduledoc false
 
+  @spec options!(keyword()) :: map()
   def options!(opts) do
     if !Keyword.keyword?(opts), do: raise(ArgumentError, "analyzer must be a keyword list")
 

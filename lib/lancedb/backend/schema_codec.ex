@@ -2,6 +2,8 @@ defmodule LanceDB.Backend.SchemaCodec do
   @moduledoc false
   alias LanceDB.{Field, Schema}
   @doc false
+  @spec decode(String.t(), :logical | :arrow) ::
+          {:ok, Schema.t() | LanceDB.ArrowSchema.t()} | {:error, JSON.decode_error_reason()}
   def decode(json, representation \\ :logical) when is_binary(json) do
     case JSON.decode(json) do
       {:ok, wire} -> {:ok, from_wire(wire, representation)}
@@ -23,6 +25,7 @@ defmodule LanceDB.Backend.SchemaCodec do
     if representation == :logical, do: logical_fields(fields), else: fields
   end
 
+  @spec logical_fields([Field.t()]) :: [Field.t()]
   def logical_fields(fields), do: Enum.map(fields, &logical_field/1)
 
   defp logical_field(%Field{type: type, metadata: metadata} = field) do
@@ -118,14 +121,17 @@ defmodule LanceDB.Backend.SchemaCodec do
 
   defp fetch(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))
 
+  @spec encode!(Schema.t() | list() | nil) :: String.t() | nil
   def encode!(nil), do: nil
   def encode!(%Schema{} = schema), do: encode!(schema.fields)
 
   def encode!(fields),
     do: fields |> Schema.new() |> Map.fetch!(:fields) |> Enum.map(&field/1) |> JSON.encode!()
 
+  @spec encode_description([Field.t()]) :: String.t()
   def encode_description(fields), do: fields |> Enum.map(&field/1) |> JSON.encode!()
 
+  @spec type_definition!(term()) :: map()
   def type_definition!(type), do: type |> Schema.normalize_type!() |> type()
 
   defp field(%Field{} = field),

@@ -1,5 +1,6 @@
 defmodule LanceDB.StorageOptions do
   @moduledoc false
+  @spec normalize!(map()) :: %{String.t() => String.t()}
   def normalize!(values) when is_map(values) and not is_struct(values) do
     pairs =
       Enum.map(values, fn {key, value} ->

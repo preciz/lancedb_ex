@@ -4,6 +4,8 @@ defmodule LanceDB.Ingestion do
   alias LanceDB.{Error, Records, WriteResult}
   alias LanceDB.Ingestion.{Plan, Source}
 
+  @spec add(LanceDB.Table.t(), [map()] | LanceDB.Source.t(), keyword()) ::
+          {:ok, WriteResult.t()} | {:error, map() | Error.t() | String.t()}
   def add(table, input, opts) do
     source = LanceDB.Source.coerce(input)
     plan = Plan.new(opts)
@@ -57,6 +59,8 @@ defmodule LanceDB.Ingestion do
     end
   end
 
+  @spec run_operation((-> Backend.result(reference())), Enumerable.t()) ::
+          Backend.result(Backend.write_output()) | {:error, map() | Error.t() | String.t()}
   def run_operation(open, batches) do
     case open.() do
       {:ok, writer} -> run_writer(writer, batches, :operation)

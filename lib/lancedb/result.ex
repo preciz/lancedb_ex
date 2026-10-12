@@ -1,9 +1,12 @@
 defmodule LanceDB.Result do
   @moduledoc false
 
+  @spec decode(LanceDB.Native.result(String.t())) ::
+          {:ok, term()} | {:error, LanceDB.Native.error() | JSON.decode_error_reason()}
   def decode({:ok, json}), do: JSON.decode(json)
   def decode({:error, reason}), do: {:error, reason}
 
+  @spec rows!(String.t()) :: [map()]
   def rows!(json) do
     case JSON.decode!(json) do
       %{"rows" => rows, "binary_fields" => fields} -> Enum.map(rows, &decode_fields(&1, fields))

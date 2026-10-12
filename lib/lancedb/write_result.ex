@@ -7,12 +7,14 @@ defmodule LanceDB.WriteResult do
   defstruct [:operation, :version, :inserted, :updated, :deleted, :attempts, :commits]
 
   @doc false
+  @spec counts(t() | LanceDB.Native.counts_output(), atom()) :: t()
   def counts(%__MODULE__{} = value, operation), do: %{value | operation: operation}
 
   def counts({:write, value}, operation),
     do: struct!(__MODULE__, Map.put(value, :operation, operation))
 
   @doc false
+  @spec version(LanceDB.Native.version_output(), atom()) :: t()
   def version({:version, value}, operation), do: %__MODULE__{operation: operation, version: value}
 
   @type t :: %__MODULE__{

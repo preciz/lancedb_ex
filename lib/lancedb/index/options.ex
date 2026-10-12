@@ -6,6 +6,7 @@ defmodule LanceDB.Index.Options do
   @training_options [:num_partitions, :sample_rate, :max_iterations, :target_partition_size]
   @count_options @training_options ++ [:num_sub_vectors, :m, :ef_construction]
 
+  @spec parse!(keyword()) :: map()
   def parse!(opts) do
     opts =
       Keyword.validate!(

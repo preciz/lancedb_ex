@@ -1,6 +1,7 @@
 defmodule LanceDB.Options do
   @moduledoc false
 
+  @spec batch_size!(keyword()) :: {pos_integer(), keyword()}
   def batch_size!(opts) do
     {size, opts} = Keyword.pop(opts, :batch_size, 1024)
 
@@ -10,6 +11,7 @@ defmodule LanceDB.Options do
     {size, opts}
   end
 
+  @spec filter!(String.t() | LanceDB.Expr.t() | nil) :: String.t() | nil
   def filter!(nil), do: nil
   def filter!(%LanceDB.Expr{} = expression), do: LanceDB.Expr.to_sql(expression)
 
@@ -21,6 +23,7 @@ defmodule LanceDB.Options do
 
   def filter!(_), do: raise(ArgumentError, "filter must be an Expr, non-empty SQL string or nil")
 
+  @spec column_name!(atom() | String.t()) :: String.t()
   def column_name!(name) when is_atom(name) and not is_nil(name),
     do: column_name!(Atom.to_string(name))
 
@@ -33,6 +36,7 @@ defmodule LanceDB.Options do
   def column_name!(_),
     do: raise(ArgumentError, "column names must be non-empty strings or atoms")
 
+  @spec column_names!([atom() | String.t()]) :: [String.t()]
   def column_names!([_ | _] = names) do
     names = Enum.map(names, &column_name!/1)
 
@@ -44,6 +48,7 @@ defmodule LanceDB.Options do
 
   def column_names!(_), do: raise(ArgumentError, "columns must be a non-empty list")
 
+  @spec string!(term(), String.t()) :: String.t()
   def string!(value, label) do
     if !(is_binary(value) and String.valid?(value) and String.trim(value) != ""),
       do: raise(ArgumentError, "#{label} must be a non-empty UTF-8 string")
@@ -51,6 +56,7 @@ defmodule LanceDB.Options do
     value
   end
 
+  @spec version!(term()) :: pos_integer()
   def version!(version) do
     if !(is_integer(version) and version > 0 and version <= 18_446_744_073_709_551_615),
       do: raise(ArgumentError, "version must be a positive uint64 integer")
@@ -58,6 +64,7 @@ defmodule LanceDB.Options do
     version
   end
 
+  @spec timeout_ms!(term()) :: pos_integer() | nil
   def timeout_ms!(nil), do: nil
 
   def timeout_ms!(value) do
@@ -67,6 +74,7 @@ defmodule LanceDB.Options do
     value
   end
 
+  @spec metadata!(map(), boolean()) :: %{String.t() => String.t() | nil}
   def metadata!(values, allow_delete \\ false)
 
   def metadata!(values, allow_delete) when is_map(values) and not is_struct(values) do

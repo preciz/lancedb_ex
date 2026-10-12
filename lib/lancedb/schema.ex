@@ -211,6 +211,7 @@ defmodule LanceDB.Schema do
   @units ~w(second millisecond microsecond nanosecond)a
 
   @doc false
+  @spec normalize_type!(term()) :: logical_type()
   def normalize_type!(type) when type in @primitives, do: type
 
   def normalize_type!({kind, precision, scale})

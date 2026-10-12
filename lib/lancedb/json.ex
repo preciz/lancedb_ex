@@ -24,6 +24,7 @@ defmodule LanceDB.JSON do
   def null, do: new(nil)
 
   @doc false
+  @spec encode!(term()) :: String.t()
   def encode!(value), do: value |> normalize!() |> JSON.encode!()
 
   defp normalize!(value)

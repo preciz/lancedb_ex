@@ -19,8 +19,10 @@ defmodule LanceDB.Error do
           message: String.t(),
           details: map()
         }
+  @type reason :: t() | map() | String.t()
 
   @doc false
+  @spec normalize(t() | map() | String.t(), atom() | nil) :: t()
   def normalize(%__MODULE__{} = error, operation),
     do: %{error | operation: operation || error.operation}
 

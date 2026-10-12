@@ -4,6 +4,8 @@ defmodule LanceDB.Query.Executor do
   alias LanceDB.Backend
   alias LanceDB.Query.{Callback, Deadline, Plan}
 
+  @spec execute(LanceDB.Table.t(), Plan.t(), :execute | LanceDB.Native.query_operation()) ::
+          LanceDB.result([map()] | String.t() | LanceDB.ArrowSchema.t())
   def execute(table, plan, operation) do
     context = %{execution_id: make_ref(), operation_id: make_ref()}
 
@@ -36,6 +38,7 @@ defmodule LanceDB.Query.Executor do
     end
   end
 
+  @spec open(LanceDB.Table.t(), Plan.t(), pos_integer(), map()) :: LanceDB.result(reference())
   def open(table, plan, batch_size, context \\ %{}) do
     LanceDB.Execution.run(
       :stream_open,
@@ -50,6 +53,7 @@ defmodule LanceDB.Query.Executor do
       else: Backend.stream_open(table, plan, batch_size)
   end
 
+  @spec next_batch(reference(), map()) :: LanceDB.result(LanceDB.Batch.t() | nil)
   def next_batch(cursor, context \\ %{}),
     do:
       LanceDB.Execution.run(
@@ -58,6 +62,7 @@ defmodule LanceDB.Query.Executor do
         context
       )
 
+  @spec close(reference(), map()) :: LanceDB.result(:ok)
   def close(cursor, context \\ %{}),
     do: LanceDB.Execution.run(:stream_close, fn -> Backend.stream_close(cursor) end, context)
 

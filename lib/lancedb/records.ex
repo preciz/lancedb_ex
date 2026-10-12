@@ -1,6 +1,7 @@
 defmodule LanceDB.Records do
   @moduledoc false
 
+  @spec prepare(term(), :infer | :typed, boolean()) :: LanceDB.result([map()])
   def prepare(data, mode, allow_empty \\ false) do
     with :ok <- validate(data, mode, allow_empty), do: {:ok, json_rows(data, mode)}
   rescue
@@ -18,6 +19,7 @@ defmodule LanceDB.Records do
   defp json_rows(data, :typed),
     do: Enum.map(data, &Map.new(&1, fn {key, value} -> {key, json_value!(value)} end))
 
+  @spec validate(term(), :infer | :typed, boolean()) :: :ok | {:error, String.t()}
   def validate(records, :infer, _allow_empty), do: validate(records)
   def validate([], :typed, true), do: :ok
 
@@ -35,6 +37,7 @@ defmodule LanceDB.Records do
 
   # Prevent Arrow inference from silently dropping fields or replacing mistyped
   # scalar values with null.
+  @spec validate(term()) :: :ok | {:error, String.t()}
   def validate([first | _] = records) when is_map(first) and not is_struct(first) do
     with {:ok, normalized} <- normalize(records),
          [sample | _] = normalized,
@@ -51,6 +54,7 @@ defmodule LanceDB.Records do
 
   def validate(_), do: {:error, "Records must be a non-empty list of maps"}
 
+  @spec json_value!(term()) :: term()
   def json_value!(%LanceDB.Blob.Reference{uri: uri}),
     do: json_value!(%{data: nil, uri: LanceDB.Options.string!(uri, "blob URI")})
 

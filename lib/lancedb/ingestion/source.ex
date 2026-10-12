@@ -1,8 +1,13 @@
 defmodule LanceDB.Ingestion.Source do
   @moduledoc false
+  @type item :: {:ok, term()} | {:error, LanceDB.Error.t()}
+  @type reducer(accumulator) :: (item(), accumulator -> {:cont | :halt, accumulator})
 
   # Own the suspended continuation so a failing finalizer cannot replace the
   # consumer's error or confirmed commits. Producers still run in their caller.
+  @spec reduce_while(Enumerable.t(), accumulator, reducer(accumulator)) ::
+          {accumulator, LanceDB.Error.t() | nil}
+        when accumulator: var
   def reduce_while(enumerable, accumulator, reducer),
     do: reduce({:start, enumerable}, accumulator, reducer)
 

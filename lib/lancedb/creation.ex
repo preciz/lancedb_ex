@@ -4,6 +4,8 @@ defmodule LanceDB.Creation do
   @moduledoc false
   alias LanceDB.{Backend, Error, Ingestion, Options, Records, Schema}
 
+  @spec create(LanceDB.Connection.t(), String.t(), [map()] | LanceDB.Source.t(), keyword()) ::
+          {:ok, LanceDB.Table.t()} | {:error, Error.reason()}
   def create(conn, name, input, opts) do
     opts = CreationOptions.parse!(opts)
     name = Options.string!(name, "table name")

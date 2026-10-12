@@ -23,8 +23,11 @@ defmodule LanceDB.Reranker do
   """
 
   @callback rerank([map()], [map()]) :: [map()] | {:ok, [map()]} | {:error, term()}
+  @type callback :: ([map()], [map()] -> [map()] | {:ok, [map()]} | {:error, term()})
+  @type t :: :rrf | callback()
 
   @doc false
+  @spec validate!(:rrf | module() | callback()) :: t()
   def validate!(:rrf), do: :rrf
   def validate!(fun) when is_function(fun, 2), do: fun
 

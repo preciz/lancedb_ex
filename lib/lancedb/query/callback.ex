@@ -2,6 +2,12 @@ defmodule LanceDB.Query.Callback do
   @moduledoc false
   alias LanceDB.Result
 
+  @spec run(
+          ([map()], [map()] -> [map()] | {:ok, [map()]} | {:error, term()}),
+          String.t(),
+          String.t(),
+          timeout()
+        ) :: {:ok, [map()]} | {:error, String.t() | LanceDB.Error.t()}
   def run(callback, vector, text, timeout) do
     owner = self()
     tag = make_ref()

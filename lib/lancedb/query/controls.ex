@@ -20,11 +20,13 @@ defmodule LanceDB.Query.Controls do
   @hybrid [:rrf_k, :normalize, :reranker] ++ @text
   @max 9_223_372_036_854_775_807
 
+  @spec normalize!(keyword()) :: map()
   def normalize!(opts) do
     opts = Keyword.validate!(opts, Enum.uniq(@vector ++ @hybrid))
     Map.new(opts, fn {key, value} -> {key, value!(key, value)} end)
   end
 
+  @spec validate!(LanceDB.Query.Definition.source(), map()) :: :ok
   def validate!(source, controls) do
     kind = if source == :scan, do: :scan, else: elem(source, 0)
 
@@ -45,6 +47,7 @@ defmodule LanceDB.Query.Controls do
   defp allowed(:hybrid), do: @vector ++ @hybrid
   defp allowed(_), do: @vector
 
+  @spec default_limit(atom()) :: pos_integer()
   def default_limit(:scan), do: 100
   def default_limit(_), do: 10
 

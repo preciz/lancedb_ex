@@ -6,6 +6,7 @@ defmodule LanceDB.Index.Definition do
   @opaque t :: %__MODULE__{options: map()}
 
   @doc false
+  @spec new(keyword() | t()) :: t()
   def new(opts \\ [])
   def new(%__MODULE__{} = definition), do: definition
 
