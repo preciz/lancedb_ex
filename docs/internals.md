@@ -21,7 +21,8 @@ boundaries when you change the code:
 | `Query.Executor` | Use the same Arrow cursor for immediate and streaming reads. Keep callbacks in BEAM. |
 | `Creation`, `Write`, `SchemaEvolution`, and `Ingestion` | Share source consumption, row and batch transport, and writer cleanup. |
 | `Schema`, `ArrowSchema`, and native `StorageSchema` | Separate logical definitions, physical output, and checks for stored fields. |
-| `TableCache` | Retain handles, coalesce requests, enforce capacities, and discard stale task results. |
+| `TableCache` | Coordinate shared requests, supervised tasks, caller monitors, replies, telemetry, and rejection of stale task results. |
+| `TableCache.Entries` | Define entry reservation, request accounting, recency, eviction selection, and idle expiry without process effects. |
 | `TableCache.Options` and `TableCache.Worker` | Validate fixed instance settings and perform connection, open, and warming work outside the coordinator. |
 | Native `outcome.rs` and `wire.rs` | Define engine results and encode them for BEAM. |
 | Native compatibility modules | Keep SDK workarounds separate from the public API. |

@@ -37,8 +37,8 @@ defmodule LanceDB.TableCache do
   """
   use GenServer
   alias LanceDB.{Error, Execution, Options}
+  alias LanceDB.TableCache.{Entries, Warming, Worker}
   alias LanceDB.TableCache.Options, as: CacheOptions
-  alias LanceDB.TableCache.{Warming, Worker}
   @typep state :: map()
 
   @doc "Starts a cache and its linked task supervisor without opening storage until needed."
@@ -152,7 +152,8 @@ defmodule LanceDB.TableCache do
     previous = get_in(state, [:entries, name, :warming]) || %{}
     extra = Enum.count(names, &(not Map.has_key?(previous, &1)))
 
-    with :ok <- admit(state, extra), {:ok, state} <- reserve(state, name) do
+    with :ok <- Entries.admit(state.entries, extra, state.options.max_requests),
+         {:ok, state} <- reserve(state, name) do
       entry = state.entries[name]
 
       warming = Enum.reduce(names, entry.warming, &enqueue_index/2)
@@ -233,7 +234,8 @@ defmodule LanceDB.TableCache do
   end
 
   defp fetch_pending(state, name, request, from) do
-    with :ok <- admit(state, 1), {:ok, updated} <- reserve(state, name) do
+    with :ok <- Entries.admit(state.entries, 1, state.options.max_requests),
+         {:ok, updated} <- reserve(state, name) do
       entry = updated.entries[name]
       monitor = Process.monitor(elem(from, 0))
 
@@ -264,76 +266,37 @@ defmodule LanceDB.TableCache do
     end
   end
 
-  defp admit(state, extra) do
-    used =
-      Enum.reduce(state.entries, 0, fn {_name, entry}, count ->
-        count + map_size(entry.waiters) + map_size(entry.warming)
-      end)
-
-    if used + extra <= state.options.max_requests,
-      do: :ok,
-      else: {:error, failure(:busy, "Table cache request capacity reached")}
-  end
-
   defp reserve(state, name) do
-    if Map.has_key?(state.entries, name) do
-      {:ok, touch(state, name)}
-    else
-      with {:ok, state} <- make_room(state) do
-        entry = %{
-          generation: make_ref(),
-          table: nil,
-          opening: :queued,
-          waiters: %{},
-          warming: %{},
-          touched: now(),
-          order: state.tick + 1
-        }
-
-        {:ok, %{state | entries: Map.put(state.entries, name, entry), tick: state.tick + 1}}
-      end
-    end
-  end
-
-  defp make_room(state) do
-    if map_size(state.entries) < state.options.max_tables do
-      {:ok, state}
-    else
-      candidate =
-        state.entries
-        |> Enum.reject(fn {_name, entry} -> map_size(entry.waiters) > 0 end)
-        |> Enum.min_by(fn {_name, entry} -> entry.order end, fn -> nil end)
-
-      case candidate do
-        nil -> {:error, failure(:busy, "All table cache entries have pending fetch callers")}
-        {name, _} -> {:ok, discard(state, name, :capacity)}
-      end
+    with {:ok, entries, tick, discarded} <-
+           Entries.reserve(state.entries, name, state.options.max_tables, state.tick, now()) do
+      discard_entry(state, discarded, :capacity)
+      {:ok, %{state | entries: entries, tick: tick}}
     end
   end
 
   defp touch(state, name) do
-    entry = %{state.entries[name] | touched: now(), order: state.tick + 1}
-    %{put_entry(state, name, entry) | tick: state.tick + 1}
+    {entries, tick} = Entries.touch(state.entries, name, state.tick, now())
+    %{state | entries: entries, tick: tick}
   end
 
   defp put_entry(state, name, entry), do: %{state | entries: Map.put(state.entries, name, entry)}
 
   defp discard(state, name, reason) do
-    case Map.pop(state.entries, name) do
-      {nil, _} ->
-        state
+    {entry, entries} = Map.pop(state.entries, name)
+    discard_entry(state, if(entry, do: {name, entry}), reason)
+    %{state | entries: entries}
+  end
 
-      {entry, entries} ->
-        reply_waiters(entry, {:error, failure(:cancelled, "Table cache entry was discarded")})
+  defp discard_entry(_state, nil, _reason), do: :ok
 
-        :telemetry.execute([:lancedb, :table_cache, :evict], %{count: 1}, %{
-          cache_id: state.cache_id,
-          table_name: name,
-          reason: reason
-        })
+  defp discard_entry(state, {name, entry}, reason) do
+    reply_waiters(entry, {:error, failure(:cancelled, "Table cache entry was discarded")})
 
-        %{state | entries: entries}
-    end
+    :telemetry.execute([:lancedb, :table_cache, :evict], %{count: 1}, %{
+      cache_id: state.cache_id,
+      table_name: name,
+      reason: reason
+    })
   end
 
   defp forget(state, predicate) do
@@ -533,17 +496,9 @@ defmodule LanceDB.TableCache do
   end
 
   defp expire(state) do
-    if state.options.idle_timeout_ms do
-      cutoff = now() - state.options.idle_timeout_ms
-
-      state.entries
-      |> Enum.filter(fn {_name, entry} ->
-        entry.touched <= cutoff and map_size(entry.waiters) == 0
-      end)
-      |> Enum.reduce(state, fn {name, _entry}, state -> discard(state, name, :idle) end)
-    else
-      state
-    end
+    state.entries
+    |> Entries.expired(state.options.idle_timeout_ms, now())
+    |> Enum.reduce(state, fn name, state -> discard(state, name, :idle) end)
   end
 
   defp schedule_expiry(state) do
