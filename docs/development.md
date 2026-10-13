@@ -113,6 +113,10 @@ CI runs formatting, strict Elixir linting, Clippy with warnings denied for
 all native targets, locked Cargo tests and the full Elixir suite with coverage.
 Source checks and the dependent MinIO job build the current native sources with
 `LANCEDB_BUILD=true`, independently of the selected precompiled build.
+Both jobs force the package's Mix compilation after cache restoration. This
+runs Rustler's copy step to recreate `priv/native` even when cached BEAM files
+are already current; Cargo keeps using its incremental build cache. The MinIO
+job compiles in `MIX_ENV=test` before starting the integration tests.
 
 The separate `native-artifacts.yml` workflow runs when build/checksum manifests
 change, on `v*` tag pushes, or by manual dispatch. It checks source freshness,

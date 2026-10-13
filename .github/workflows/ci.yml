@@ -43,7 +43,10 @@ jobs:
       - name: Validate committed Cargo lockfile before Rustler runs
         run: cargo metadata --locked --format-version=1 > /dev/null
       - run: cargo clippy --locked --release --all-targets -p lancedb_nif -- -D warnings
-      - run: mix compile --warnings-as-errors
+      # Cached BEAM files can outlive priv/native. Re-run Rustler's copy step;
+      # Cargo still reuses its compiled artifacts in target.
+      - name: Compile package and restore native runtime library
+        run: mix compile --force --warnings-as-errors
       - run: mix docs --warnings-as-errors
       - run: env -u LANCEDB_BUILD mix hex.build
       - run: git diff --exit-code Cargo.lock
@@ -82,6 +85,8 @@ jobs:
       - run: mix deps.get
       - name: Validate committed Cargo lockfile before Rustler runs
         run: cargo metadata --locked --format-version=1 > /dev/null
+      - name: Compile package and restore native runtime library
+        run: MIX_ENV=test mix compile --force --warnings-as-errors
       - name: Test against MinIO
         run: scripts/test_s3.sh
       - run: git diff --exit-code Cargo.lock

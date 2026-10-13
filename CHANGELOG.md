@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restore native runtime libraries after source CI cache hits by forcing package
+  compilation in both source and MinIO jobs while retaining Cargo's build cache.
 - Add Apple Silicon and Intel macOS targets to native builds and anonymous
   production consumer validation. Require macOS 15 or later; public archives
   are pending a new verified four-platform native build.
