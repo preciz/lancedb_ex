@@ -202,9 +202,6 @@ async fn alter_columns_impl(
     let names: Vec<_> = changes.iter().map(|change| change.path.clone()).collect();
     let paths = paths(&schema, &names)?;
     validate_renames(&schema, &changes, &paths)?;
-    for (change, path) in changes.iter().zip(&paths) {
-        crate::compat::storage::validate_cast_path(change.r#type.is_some(), path.len())?;
-    }
     let changes: Vec<_> = changes
         .into_iter()
         .map(|change| {

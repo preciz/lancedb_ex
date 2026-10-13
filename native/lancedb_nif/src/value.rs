@@ -6,9 +6,6 @@ use serde_json::Value;
 pub(crate) fn normalize(value: &mut Value, field: &Field) -> Result<(), Failure> {
     if value.is_null() {
         return if field.is_nullable() {
-            if !crate::compat::storage::supports_null(field.data_type()) {
-                return Err("Lance 10 cannot store a null struct with non-nullable descendants; supply a complete struct value".into());
-            }
             Ok(())
         } else {
             Err(mismatch(field).into())
@@ -203,7 +200,7 @@ pub(crate) fn sql_literal(value: &Value, data_type: &DataType) -> Result<String,
             quote(&value.to_string())
         )),
         DataType::Dictionary(_, item) => sql_literal(value, item),
-        DataType::Map(_, _) => return Err("Map literal updates are unsupported by Lance 10's SQL type cast; use upsert or merge with complete rows".into()),
+        DataType::Map(_, _) => return Err("Map literal updates are unsupported by the SQL type cast; use upsert or merge with complete rows".into()),
         DataType::List(item) | DataType::LargeList(item) | DataType::FixedSizeList(item, _) => {
             let values = value.as_array().ok_or("Expected list literal")?;
             let expressions = values
@@ -214,7 +211,7 @@ pub(crate) fn sql_literal(value: &Value, data_type: &DataType) -> Result<String,
         }
         DataType::Struct(fields) => {
             if fields.iter().any(|field| !field.is_nullable()) {
-                return Err("Lance 10 cannot cast struct update literals to required child fields; use upsert or merge_insert with complete records".into());
+                return Err("SQL literals cannot cast non-null structs to required child fields; use upsert or merge_insert with complete records".into());
             }
             let values = value.as_object().ok_or("Expected struct literal")?;
             let mut arguments = Vec::new();

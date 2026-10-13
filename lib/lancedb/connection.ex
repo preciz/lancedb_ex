@@ -88,10 +88,11 @@ defmodule LanceDB.Connection do
   * `:max_rows_per_file`, `:max_rows_per_group`, `:max_bytes_per_file` — positive
     uint32 writer limits. Byte limits are soft; omitted values use SDK defaults.
   * `:data_storage_version` — `:stable`, `:next`, or a version string: `"legacy"`,
-    `"2.0"`, `"2.1"`, `"2.2"`, `"2.3"`. Stable resolves to 2.1 in Lance 10.
+    `"2.0"`, `"2.1"`, `"2.2"`, `"2.3"`. Stable and the default resolve to 2.2 in Lance 13.
   * `:enable_stable_row_ids`, `:enable_v2_manifest_paths` — explicit booleans;
     omitted settings inherit SDK/connection defaults. Blob schemas automatically
-    require file format >= 2.2 and default to stable row IDs.
+    require file format >= 2.2. Enable stable row IDs explicitly to retain blob
+    row IDs across compaction.
   * Blob write options — `:external_blob_mode` (`:reference` or `:ingest`),
     `:allow_external_blob_outside_bases` (default false, only for reference mode),
     and positive uint32 `:blob_pack_file_size_threshold` (SDK default 1 GiB).

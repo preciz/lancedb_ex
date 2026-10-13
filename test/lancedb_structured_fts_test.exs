@@ -63,6 +63,23 @@ defmodule LanceDB.StructuredFTSTest do
     assert [%{"_score" => _, "_rowid" => _}] = rows
   end
 
+  test "fuzzy prefixes count Unicode code points", %{conn: conn} do
+    {:ok, table} =
+      LanceDB.Connection.create_table(conn, "unicode", [
+        %{id: 1, text: "éclair"},
+        %{id: 2, text: "eclair"}
+      ])
+
+    assert {:ok, :created} =
+             LanceDB.Index.create(table, :text,
+               type: :fts,
+               analyzer: [stem: false, remove_stop_words: false, ascii_folding: false]
+             )
+
+    assert ids(table, FTS.match("éclai", fuzziness: 1, prefix_length: 1)) == [1]
+    assert ids(table, FTS.match("éclair", fuzziness: 1, prefix_length: 0)) == [1, 2]
+  end
+
   test("Boolean clauses support nesting, optional scoring and exclusion", %{table: table}) do
     assert ids(table, FTS.boolean(must: ["brown"], must_not: ["dog"])) == [1, 2, 4]
     assert ids(table, FTS.boolean(should: ["dog", "fox"])) == [1, 2, 3, 4]
@@ -169,7 +186,7 @@ defmodule LanceDB.StructuredFTSTest do
     assert plan =~ "Fusion:"
   end
 
-  test("phrases require indexed positions and unindexed appends need optimization", %{
+  test("phrases scan unindexed rows unless fast search is selected", %{
     table: table,
     conn: conn
   }) do
@@ -178,8 +195,8 @@ defmodule LanceDB.StructuredFTSTest do
 
     assert ids(other, FTS.match("quick", column: :text)) == [1]
 
-    assert {:error, _} =
-             LanceDB.Query.full_text_search(other, FTS.phrase("quick brown", column: :text))
+    assert ids(other, FTS.phrase("quick brown", column: :text)) == [1]
+    assert ids(other, FTS.phrase("quick brown", column: :text), fast_search: true) == []
 
     assert {:ok, :created} =
              LanceDB.Index.create(other, :text, type: :fts, analyzer: [with_position: false])
@@ -191,9 +208,11 @@ defmodule LanceDB.StructuredFTSTest do
                %{id: 5, text: "quick brown", title: "new", vector: [1, 1]}
              ])
 
-    assert ids(table, FTS.phrase("quick brown")) == [1, 4]
+    assert ids(table, FTS.phrase("quick brown")) == [1, 4, 5]
+    assert ids(table, FTS.phrase("quick brown"), fast_search: true) == [1, 4]
     assert {:ok, :optimized} = LanceDB.Maintenance.optimize_indices(table)
     assert ids(table, FTS.phrase("quick brown")) == [1, 4, 5]
+    assert ids(table, FTS.phrase("quick brown"), fast_search: true) == [1, 4, 5]
   end
 
   test "builders reject invalid structures and unsupported options" do
@@ -203,7 +222,6 @@ defmodule LanceDB.StructuredFTSTest do
           fn -> FTS.match("x", fuzziness: 3) end,
           fn -> FTS.match("x", fuzziness: nil) end,
           fn -> FTS.match("x", fuzziness: :auto) end,
-          fn -> FTS.match("café", fuzziness: 1, prefix_length: 1) end,
           fn -> FTS.match("x", max_expansions: 0) end,
           fn -> FTS.match("x", prefix_length: -1) end,
           fn -> FTS.match("x", boost: 0) end,

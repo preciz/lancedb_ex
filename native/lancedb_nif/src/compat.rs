@@ -7,3 +7,4 @@ pub(crate) mod storage;
 pub(crate) use statistics::training_loss;
 pub(crate) mod table;
 pub(crate) mod update;
+pub(crate) mod vector_query;

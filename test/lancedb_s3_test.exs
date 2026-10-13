@@ -157,6 +157,7 @@ defmodule LanceDB.S3Test do
                "blobs",
                LanceDB.Source.rows(rows, schema: schema, batch_size: 1),
                max_rows_per_file: 1,
+               enable_stable_row_ids: true,
                enable_v2_manifest_paths: false,
                storage_options: options
              )

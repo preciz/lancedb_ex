@@ -8,6 +8,26 @@ defmodule LanceDB.BlobTest do
     %{conn: conn, path: path, schema: Schema.new(id: :int64, payload: :blob)}
   end
 
+  test "stable blob row IDs require an explicit creation option", %{conn: conn, schema: schema} do
+    rows = [%{id: 1, payload: "a"}, %{id: 2, payload: "b"}, %{id: 3, payload: "c"}]
+
+    for stable? <- [false, true] do
+      opts = [schema: schema, max_rows_per_file: 1]
+      opts = if stable?, do: Keyword.put(opts, :enable_stable_row_ids, true), else: opts
+      {:ok, table} = Connection.create_table(conn, "row_ids_#{stable?}", rows, opts)
+      {:ok, before} = Query.query(table, columns: [:id], with_row_id: true, order_by: [asc: :id])
+
+      assert {:ok, _} = LanceDB.Maintenance.compact_files(table, target_rows_per_fragment: 100)
+
+      {:ok, after_compaction} =
+        Query.query(table, columns: [:id], with_row_id: true, order_by: [asc: :id])
+
+      if stable?, do: assert(before == after_compaction), else: refute(before == after_compaction)
+      ids = Enum.map(after_compaction, & &1["_rowid"])
+      assert {:ok, ["a", "b", "c"]} = Blob.fetch(table, :payload, ids)
+    end
+  end
+
   test("blob rows and Arrow sources preserve nulls, empty bytes and schema", %{
     conn: conn,
     schema: schema
@@ -94,7 +114,7 @@ defmodule LanceDB.BlobTest do
     assert {:ok, ""} = Blob.read(blob, 3)
     assert {:ok, :ok} = Blob.seek(blob, 100)
     assert {:ok, ""} = Blob.read(blob)
-    assert {:ok, 6} = Blob.tell(blob)
+    assert {:ok, 100} = Blob.tell(blob)
     assert {:error, %Error{kind: :invalid_data}} = Blob.read_range(blob, 5, 2)
     assert {:ok, :ok} = Blob.seek(blob, 1)
     stream = Blob.stream(blob, chunk_size: 2)
@@ -333,6 +353,7 @@ defmodule LanceDB.BlobTest do
         {:ok, table} =
           Connection.create_table(conn, "property", [%{id: 1, payload: bytes}],
             schema: schema,
+            enable_stable_row_ids: true,
             mode: :overwrite
           )
 

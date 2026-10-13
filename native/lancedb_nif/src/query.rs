@@ -10,7 +10,7 @@ use crate::projection::{project, OutputProjection};
 use crate::resources::TableResource;
 use arrow_array::RecordBatch;
 use futures::{Stream, TryStreamExt};
-use lancedb::query::{ExecutableQuery, Query, QueryExecutionOptions, TakeQuery, VectorQuery};
+use lancedb::query::{ExecutableQuery, Query, QueryExecutionOptions, TakeQuery};
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::pin::Pin;
 
@@ -18,7 +18,7 @@ pub(crate) type BatchStream = Pin<Box<dyn Stream<Item = Result<RecordBatch, Fail
 
 pub(crate) enum PreparedQuery {
     Plain(Query, OutputProjection),
-    Vector(VectorQuery, OutputProjection),
+    Vector(crate::compat::vector_query::Query, OutputProjection),
     Take(TakeQuery, OutputProjection),
     Hybrid(Box<HybridPlan>),
 }

@@ -9,7 +9,7 @@ defmodule LanceDB.Maintenance do
 
   Includes `num_rows`, `num_indices`, `total_bytes`, and `fragment_stats` with
   fragment counts and physical row-count distributions (`min`, `max`, integer
-  `mean`, `p25`, `p50`, `p75`, `p99`). In LanceDB 0.37.1, small fragments have
+  `mean`, `p25`, `p50`, `p75`, `p99`). In LanceDB 0.40.0, small fragments have
   fewer than 100,000 physical rows. Physical counts can include deleted rows.
 
   `total_bytes` sums recorded data, index, and overlay file sizes for this table

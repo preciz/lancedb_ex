@@ -40,12 +40,10 @@ defmodule LanceDB.JobTest do
   end
 
   test("asynchronous build failures remain available to every waiter", %{table: table}) do
+    assert {:ok, :created} = Index.create(table, :id, type: :btree, name: "existing")
+
     assert {:ok, job} =
-             Index.create_async(table, :vector,
-               type: :ivf_pq,
-               num_partitions: 1,
-               num_sub_vectors: 1
-             )
+             Index.create_async(table, :id, type: :btree, name: "existing")
 
     assert {:error, error} = Job.wait(job, timeout_ms: 10_000)
     assert error.kind == :execution

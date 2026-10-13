@@ -1,7 +1,7 @@
 //! Adapters for metadata contracts not represented in LanceDB's typed API.
 
-/// Lance 10 reports IVF loss per entry in "indices". The high-level LanceDB
-/// 0.37.1 statistics omit it. Never return a partial or non-finite total.
+/// Lance 13 reports IVF loss per entry in "indices". The high-level LanceDB
+/// 0.40.0 statistics omit it. Never return a partial or non-finite total.
 pub(crate) fn training_loss(stats: &serde_json::Value) -> Option<f64> {
     stats
         .get("indices")?

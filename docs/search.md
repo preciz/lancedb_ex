@@ -225,7 +225,7 @@ queries.
 | Builder | Behavior and options |
 | --- | --- |
 | `FTS.match(text, opts)` | `:operator` is `:or` by default or `:and`. Positive `:boost` defaults to 1. `:fuzziness` accepts 0, 1, or 2 and defaults to 0. `:max_expansions` defaults to 50. `:prefix_length` defaults to 0. |
-| `FTS.phrase(text, opts)` | Matches ordered terms. Optional `:slop` must be non-negative and defaults to 0. The FTS index must store positions. |
+| `FTS.phrase(text, opts)` | Matches ordered terms. Optional `:slop` must be non-negative and defaults to 0. Existing FTS indexes must store positions. An explicit column also permits unindexed scans. |
 | `FTS.multi_match(text, columns, opts)` | Matches any named column. `:operator` combines terms within each column. `:boosts` supplies one positive weight for each column. All weights default to 1. |
 | `FTS.boolean(opts)` | `:must`, `:should`, and `:must_not` are query lists. At least one must or should clause is required. With must clauses, should clauses supply optional scores. Without must clauses, at least one should clause must match. |
 | `FTS.boost(positive, negative, opts)` | Returns positive matches. For rows that also match the negative query, it subtracts `negative_boost * negative_score`. The non-negative factor defaults to 0.5. Scores can become negative. This does not exclude rows. |
@@ -247,21 +247,20 @@ Phrase example:
   )
 ```
 
-Rebuild an existing index with positions if necessary. Phrase queries search
-indexed positions only. New appends become searchable after
-`Maintenance.optimize_indices/1`. Updates can make some index segments
-unusable for phrase queries. Maintenance restores usable positions. Exact
-match queries can scan unindexed text with an explicit column.
+Rebuild an existing index with positions if necessary. Phrase queries also scan
+unindexed current rows, including new appends, unless `fast_search: true` is used.
+With no index, supply an explicit column to scan its text. Index optimization
+makes appended rows searchable through indexed positions and can reduce scan work.
 
 Fuzzy expansion uses the index vocabulary. It can miss terms that occur only
 in unindexed data.
 
 Fuzzy matching uses simple query tokenization in this SDK. This can differ
 from the index's configured normalization. `:prefix_length` limits leading
-ASCII characters. Use ASCII query text if the value is positive. A value of
-zero also accepts Unicode. The package does not expose automatic fuzziness.
+Unicode code points. The package does not expose automatic fuzziness.
 
-LanceDB 0.37.1 treats that setting as exact matching. Set edit distances and
+LanceDB 0.40.0 still treats that setting as exact matching at its public query
+planning boundary. Set edit distances and
 expansion limits explicitly.
 
 ## Token inspection
@@ -296,6 +295,7 @@ This includes the selected historical snapshot when the handle has a
 historical checkout. Inspection does not change the table or index.
 
 Results use string keys `"text"` and `"position"`. Positions start at zero.
+Zero represents the first retained token even when leading terms are removed.
 Stop-word removal can leave gaps between positions. Tokens show the
 configured analyzer output. They do not show complete query execution or
 fuzzy vocabulary expansion. Results do not include original character or
@@ -340,13 +340,15 @@ hybrid queries use them, even after you reopen the table.
 | `:remove_stop_words` | Removes stop words for the selected language. |
 | `:ascii_folding` | Converts accented characters to ASCII equivalents. |
 | `:with_position` | Stores token positions. This increases index size. |
-| `:max_token_length` | Accepts a positive maximum length or `nil` to disable the limit. The default is 40. |
+| `:max_token_length` | Accepts a positive exclusive byte limit or `nil` to disable it. The default is 40; tokens with 40 or more bytes are removed before normalization. |
 | `:ngram_min_length`, `:ngram_max_length` | Accept positive bounds. Both default to 3. The minimum cannot exceed the maximum. |
 | `:ngram_prefix_only` | Generates only prefix n-grams. The default is false. |
 
 Boolean options must be `true` or `false`. The simple analyzer defaults to
 lowercase conversion, stemming, stop-word removal, and ASCII folding.
 Positions default to false. The code tokenizer has separate SDK defaults.
+N-gram analysis disables stemming and stop-word removal by default; explicit
+options override these defaults.
 For n-gram settings, use `tokenizer: :ngram`. N-grams cannot store
 positions.
 
@@ -381,8 +383,8 @@ query = LanceDB.FTS.json_match("metadata.language", "elixir", column: :text)
 JSON queries accept strings, numbers, booleans, and `nil`. Dotted paths
 select nested values. Arrays use their containing path. The current
 tokenizer cannot escape commas or semicolons in paths. It also cannot escape
-semicolons in values. The helper rejects these characters and unsupported
-fuzzy matching.
+semicolons in values. The helper rejects these characters. Fuzzy matching
+applies only to the scalar value; JSON paths and scalar types remain exact.
 
 For token inspection with a JSON analyzer, use `path,type,value` syntax. For
 example, use `title,str,elixir`.

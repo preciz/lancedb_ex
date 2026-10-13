@@ -47,6 +47,11 @@ defmodule LanceDB.VectorTypesTest do
 
       assert {:ok, [%{"id" => 2}]} =
                LanceDB.Query.search(table, [3, 4], distance: distance, limit: 1)
+
+      assert {:ok, indexed_results} =
+               LanceDB.Query.batch_search(table, [[1, 2], [3, 4]], distance: distance, limit: 1)
+
+      assert Map.new(indexed_results, &{&1["query_index"], &1["id"]}) == %{0 => 1, 1 => 2}
     end
   end
 
@@ -63,6 +68,34 @@ defmodule LanceDB.VectorTypesTest do
 
     assert {:ok, [%{"id" => 2, "_distance" => +0.0}]} =
              LanceDB.Query.search(table, [1.00000002, 0], limit: 1)
+
+    query =
+      table
+      |> LanceDB.Query.new()
+      |> LanceDB.Query.nearest_to_many([[1.00000001, 0], [1.00000002, 0]])
+      |> LanceDB.Query.select([:id])
+      |> LanceDB.Query.limit(1)
+
+    assert {:ok, rows} = LanceDB.Query.all(query)
+    assert Map.new(rows, &{&1["query_index"], &1["id"]}) == %{0 => 1, 1 => 2}
+    assert Enum.all?(rows, &(&1["_distance"] == 0.0))
+
+    assert Enum.sort_by(
+             Enum.to_list(LanceDB.Query.stream(query, batch_size: 1)),
+             & &1["query_index"]
+           ) ==
+             Enum.sort_by(rows, & &1["query_index"])
+
+    assert {:ok, output} = LanceDB.Query.schema(query)
+    assert [batch | _] = Enum.to_list(LanceDB.Query.stream_batches(query, batch_size: 1))
+    assert {:ok, ^output} = Batch.schema(batch)
+    assert {:ok, plan} = LanceDB.Query.explain(query)
+    assert is_binary(plan)
+    assert {:ok, analysis} = LanceDB.Query.analyze(query)
+    assert analysis =~ "Output: rows=2"
+
+    assert {:ok, offset_rows} = query |> LanceDB.Query.offset(1) |> LanceDB.Query.all()
+    assert Map.new(offset_rows, &{&1["query_index"], &1["id"]}) == %{0 => 2, 1 => 1}
   end
 
   test("invalid byte values, overflow and mismatched distances fail before writes", %{db: db}) do

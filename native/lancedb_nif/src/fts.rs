@@ -1,4 +1,4 @@
-use crate::analyzer::{fts_builder, FtsAnalyzer};
+use crate::analyzer::{fts_builder, saved_analyzer, FtsAnalyzer};
 use crate::error::Failure;
 use crate::resources::TableResource;
 use lancedb::index::scalar::{
@@ -118,18 +118,6 @@ impl StructuredQuery {
     fn build(&self, default_column: Option<&str>) -> Result<FtsQuery, Failure> {
         let column =
             |name: &Option<String>| name.clone().or_else(|| default_column.map(str::to_owned));
-        if let Self::Match {
-            text,
-            prefix_length,
-            ..
-        } = self
-        {
-            // Lance 10 slices fuzzy prefixes at byte offsets. Avoid a panic on
-            // a non-UTF-8 boundary until upstream supports Unicode prefixes.
-            if *prefix_length > 0 && !text.is_ascii() {
-                return Err("Positive prefix_length requires ASCII query text".into());
-            }
-        }
         let result = match self {
             Self::Match {
                 text,
@@ -208,23 +196,27 @@ impl StructuredQuery {
     }
 }
 
-fn tokens_json(tokens: Vec<lancedb::table::FtsToken>) -> String {
-    serde_json::Value::Array(
-        tokens
-            .into_iter()
-            .map(|token| serde_json::json!({"text": token.text, "position": token.position}))
+fn tokens_json(
+    text: &str,
+    builder: &lancedb::index::scalar::FtsIndexBuilder,
+) -> Result<String, Failure> {
+    let mut tokenizer = builder.build().map_err(Failure::from_error)?;
+    let tokens =
+        lance_index::scalar::inverted::query::try_collect_query_tokens(text, &mut tokenizer)
+            .map_err(Failure::from_error)?;
+    Ok(serde_json::Value::Array(
+        (0..tokens.len())
+            .map(|i| serde_json::json!({"text": tokens.get_token(i), "position": tokens.position(i)}))
             .collect(),
     )
-    .to_string()
+    .to_string())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn tokenize(text: String, analyzer: String) -> Result<String, Failure> {
     let analyzer: FtsAnalyzer = serde_json::from_str(&analyzer).map_err(Failure::from_error)?;
     let builder = fts_builder(Some(analyzer))?;
-    let tokens = crate::compat::fts::tokenize(|| lancedb::tokenize(&text, &builder))?
-        .map_err(Failure::from_error)?;
-    Ok(tokens_json(tokens))
+    crate::compat::fts::tokenize(|| tokens_json(&text, &builder))?
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -237,31 +229,7 @@ fn tokenize_table(
     reference: Term<'_>,
 ) -> Result<Atom, Failure> {
     crate::request::read(env, reference, async move {
-        let tokens = crate::compat::fts::index(async {
-            match selector.as_str() {
-                "index" => table.table.tokenize(&text, &name).await,
-                "column" => table.table.tokenize_with_column(&text, &name).await,
-                _ => Err(lancedb::Error::InvalidInput {
-                    message: "Invalid tokenizer selector".into(),
-                }),
-            }
-        })
-        .await?;
-        Ok(tokens_json(tokens))
+        let builder = saved_analyzer(&table.table, &selector, &name).await?;
+        crate::compat::fts::tokenize(|| tokens_json(&text, &builder))?
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_unicode_prefixes_before_the_sdk_can_slice_a_character() {
-        let query: StructuredQuery = serde_json::from_value(serde_json::json!({
-            "type": "match", "text": "éclair", "column": "text", "operator": "or",
-            "boost": 1.0, "fuzziness": 1, "max_expansions": 50, "prefix_length": 1
-        }))
-        .unwrap();
-        assert!(query.build(None).unwrap_err().contains("ASCII"));
-    }
 }

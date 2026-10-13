@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Upgrade source builds to LanceDB SDK 0.40.0 and Lance 13.0.0. Enable the SDK's
+  `remote` feature to work around its upstream job compilation bug.
+- Support nested struct field casts, Unicode fuzzy prefixes, and JSON fuzzy
+  values while preserving exact JSON paths/types, removing the
+  corresponding Lance 10 compatibility guards. New tables default to file format
+  2.2; blob tables require explicit stable row IDs when IDs must survive compaction.
+- Preserve tokenizer errors with the SDK's fallible collector for both explicit
+  and saved analyzers. Query analysis now reports malformed JSON query input
+  through SDK errors instead of tokenizer panics.
+- Token positions start at the first retained term. N-gram analysis now disables
+  stemming and stop-word removal by default, retaining explicit filter overrides.
+- Phrase queries scan unindexed current rows unless `fast_search: true` is used.
+  Blob reads at EOF retain positions beyond EOF instead of clamping them to the file size.
+- Permit null parents with required struct children and scalar updates on blob
+  tables. Continue rejecting direct blob-column updates before execution.
+- Offset retrieval retains duplicate occurrences. Multivector cosine distance
+  sums the closest-document cosine distance for each query vector.
+- Preserve typed float16/float64 batch searches through independent query plans
+  to avoid the SDK's float32 downcast panic. Float32 batches use its shared scan.
 - Separate source CI from native artifact validation. Verify selected binaries
   on manifest updates and release tags, and require both tag workflows to pass
   before publishing a package.

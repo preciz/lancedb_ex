@@ -75,15 +75,39 @@ defmodule LanceDB.NestedEvolutionTest do
     assert Enum.find(fields, &(&1.name == "key")).type == :int8
   end
 
-  test "nested type conversions reject the upstream panic before mutation", %{table: table} do
-    assert {:ok, before} = LanceDB.History.version(table)
+  test "nested casts preserve same-named siblings and survive reopening", %{
+    table: table,
+    path: path
+  } do
+    assert {:ok, %{version: _}} =
+             LanceDB.SchemaEvolution.alter_columns(table, [
+               {"data.count", [type: :int64, rename: :total]},
+               {"other.count", [type: :int16]}
+             ])
 
-    assert {:error, reason} =
-             LanceDB.SchemaEvolution.alter_columns(table, [{"data.count", [type: :int64]}])
+    {:ok, conn} = LanceDB.connect(path)
+    {:ok, reopened} = LanceDB.Connection.open_table(conn, "docs")
+    {:ok, schema} = LanceDB.Table.schema(reopened)
+    data = Enum.find(schema.fields, &(&1.name == "data"))
+    other = Enum.find(schema.fields, &(&1.name == "other"))
+    assert {:struct, [%{name: "total", type: :int64} | _]} = data.type
+    assert {:struct, [%{name: "count", type: :int16}]} = other.type
 
-    assert reason.message =~ "nested field"
-    assert {:ok, ^before} = LanceDB.History.version(table)
-    assert {:ok, [%{"data" => %{"count" => 10}}]} = LanceDB.Query.query(table)
+    assert {:ok, [%{"data" => %{"total" => 10}, "other" => %{"count" => 20}}]} =
+             LanceDB.Query.query(reopened)
+
+    assert {:ok, %{inserted: 1}} =
+             LanceDB.Table.add(reopened, [
+               %{
+                 id: 2,
+                 data: %{total: 30, label: "later", optional: nil},
+                 other: %{count: 40},
+                 values: []
+               }
+             ])
+
+    assert {:ok, [%{"data" => %{"total" => 10}}, %{"data" => %{"total" => 30}}]} =
+             LanceDB.Query.query(reopened, order_by: [asc: :id])
   end
 
   test "quoted nested names resolve without confusing literal dots with paths", %{conn: conn} do

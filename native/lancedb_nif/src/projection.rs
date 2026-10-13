@@ -110,7 +110,7 @@ impl ProjectionRequest {
                 selected.push((internal.clone(), sql));
                 output.push((internal, name));
             }
-            // Lance 10 requires a physical input even for constant expressions.
+            // Retain a physical input for constant expressions.
             let anchor = schema.fields().first().ok_or("Table has no columns")?;
             selected.push((anchor.name().clone(), quote(anchor.name())));
             for (name, _, _) in order_by {

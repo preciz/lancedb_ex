@@ -104,7 +104,7 @@ They do not accept `:num_bits`. HNSW flat stores unquantized vectors.
 
 `:approx_mode` accepts `:fast`, `:normal`, `:accurate`, or nil. Omission
 or nil uses the SDK's normal mode. This option controls the tradeoff between
-speed and recall for RabitQ. In Lance 10, fast mode also enables ACORN
+speed and recall for RabitQ. In Lance 13, fast mode also enables ACORN
 traversal for prefiltered HNSW searches. Other index types ignore it.
 Refinement is a separate option.
 

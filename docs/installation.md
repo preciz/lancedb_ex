@@ -52,8 +52,10 @@ tree entry. Applications using the optional [table cache](table-cache.md)
 supervise that component themselves.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
-default artifact URL. The Elixir package version is `0.2.0`, and the package
-pins the SDK version to `=0.37.1`. These versions do not identify the
+default artifact URL. The Elixir package version is `0.2.0`. The released
+package uses SDK `0.37.1`; development source pins `=0.40.0`.
+Use `LANCEDB_BUILD=true` to test development source until new matching native
+artifacts are published and selected. These versions do not identify the
 wrapper binary. Each native build has the SemVer version
 `0.0.0+<full-source-revision>`.
 

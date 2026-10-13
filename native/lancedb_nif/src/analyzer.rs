@@ -1,5 +1,58 @@
 use crate::error::Failure;
 use lancedb::index::scalar::FtsIndexBuilder;
+use lancedb::index::IndexType;
+
+// SDK 0.40's public tokenize helpers discard deferred tokenizer errors.
+// Resolve their saved configuration and use the fallible collector instead.
+pub(crate) async fn saved_analyzer(
+    table: &lancedb::Table,
+    selector: &str,
+    name: &str,
+) -> Result<FtsIndexBuilder, Failure> {
+    let column = match selector {
+        "index" => None,
+        "column" => {
+            let arrow = table.schema().await.map_err(Failure::from_error)?;
+            let schema =
+                lance::datatypes::Schema::try_from(arrow.as_ref()).map_err(Failure::from_error)?;
+            lance::datatypes::parse_field_path(name).map_err(Failure::from_error)?;
+            let fields = schema
+                .resolve_case_insensitive(name)
+                .ok_or_else(|| format!("Field path '{name}' not found in schema"))?;
+            let names: Vec<_> = fields.iter().map(|field| field.name.as_str()).collect();
+            Some(lance::datatypes::format_field_path(&names))
+        }
+        _ => return Err("Invalid tokenizer selector".into()),
+    };
+    let indices = table.list_indices().await.map_err(Failure::from_error)?;
+    let matches: Vec<_> = indices
+        .iter()
+        .filter(|index| match &column {
+            None => index.name == name,
+            Some(column) => {
+                index.index_type == IndexType::FTS
+                    && index.columns.len() == 1
+                    && index.columns[0] == *column
+            }
+        })
+        .collect();
+    let description = format!("{selector} '{name}'");
+    let index = match matches.as_slice() {
+        [index] => *index,
+        [] => return Err(format!("No FTS index for {description}").into()),
+        _ => return Err(format!("FTS index selection is ambiguous for {description}").into()),
+    };
+    if index.index_type != IndexType::FTS {
+        return Err(format!("Index '{name}' is not a full text search index").into());
+    }
+    let details = index.index_details.as_deref().ok_or_else(|| {
+        format!(
+            "FTS index '{}' does not include tokenizer details",
+            index.name
+        )
+    })?;
+    serde_json::from_str(details).map_err(Failure::from_error)
+}
 
 #[derive(serde::Deserialize)]
 pub(crate) struct FtsAnalyzer {

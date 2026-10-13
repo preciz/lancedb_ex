@@ -86,7 +86,7 @@ pub(crate) fn take(batch: &RecordBatch, indices: &dyn Array) -> Result<RecordBat
     RecordBatch::try_new(batch.schema(), arrays).map_err(Failure::from_error)
 }
 
-/// Match LanceDB 0.37.1's rank-then-min/max or direct min/max normalization.
+/// Match LanceDB 0.40.0's rank-then-min/max or direct min/max normalization.
 /// Scores are not inverted: vector distance is smaller-is-better, FTS larger-is-better.
 pub(crate) fn normalize(
     batch: RecordBatch,

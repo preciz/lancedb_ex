@@ -5,6 +5,8 @@ defmodule LanceDB.Blob do
   Obtain handles with
   `LanceDB.Blob.open/3`, using `_rowid` values from a query with
   `with_row_id: true`. Offsets and lengths are bytes, relative to the blob.
+  To retain row IDs across compaction, create the table with
+  `enable_stable_row_ids: true`. Blob tables do not enable it automatically.
 
   Reads return Elixir binaries. `read/2` and `seek/2` share a synchronized cursor
   when a handle is passed between processes; range reads and `stream/2` leave

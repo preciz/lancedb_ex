@@ -56,15 +56,23 @@ impl Failure {
         let kind = if let Some(error) = source.downcast_ref::<lancedb::Error>() {
             use lancedb::Error::*;
             match error {
-                TableNotFound { .. } | DatabaseNotFound { .. } | IndexNotFound { .. } => {
-                    "not_found"
-                }
-                TableAlreadyExists { .. } | DatabaseAlreadyExists { .. } => "already_exists",
-                InvalidTableName { .. } | InvalidInput { .. } | Schema { .. } | Arrow { .. } => {
-                    "invalid_data"
-                }
+                TableNotFound { .. }
+                | DatabaseNotFound { .. }
+                | IndexNotFound { .. }
+                | ColumnNotFound { .. }
+                | JobNotFound { .. } => "not_found",
+                TableAlreadyExists { .. }
+                | DatabaseAlreadyExists { .. }
+                | ColumnAlreadyExists { .. } => "already_exists",
+                InvalidTableName { .. }
+                | InvalidInput { .. }
+                | InvalidExpression { .. }
+                | Schema { .. }
+                | Arrow { .. } => "invalid_data",
                 Timeout { .. } => "timeout",
-                NotSupported { .. } => "unsupported",
+                NotSupported { .. } | NotAComputedColumn { .. } | NotAMaterializedView { .. } => {
+                    "unsupported"
+                }
                 ObjectStore { .. } | CreateDir { .. } => "storage",
                 JobCancelled { .. } => "cancelled",
                 Lance { source } => return Self::from_lance(source),
@@ -156,6 +164,23 @@ mod tests {
                     name: "docs".into(),
                 },
                 "already_exists",
+            ),
+            (
+                lancedb::Error::ColumnNotFound {
+                    name: "missing".into(),
+                },
+                "not_found",
+            ),
+            (
+                lancedb::Error::ColumnAlreadyExists { name: "id".into() },
+                "already_exists",
+            ),
+            (
+                lancedb::Error::InvalidExpression {
+                    column: "id".into(),
+                    message: "bad expression".into(),
+                },
+                "invalid_data",
             ),
             (
                 lancedb::Error::Timeout {

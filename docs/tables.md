@@ -19,7 +19,7 @@ stats["fragment_stats"]["lengths"]
 
 Fragment lengths report physical row counts as `min`, `max`, integer
 `mean`, `p25`, `p50`, `p75`, and `p99`. These counts can include
-deleted rows. `num_rows` counts live rows. In LanceDB 0.37.1, a small
+deleted rows. `num_rows` counts live rows. In LanceDB 0.40.0, a small
 fragment has fewer than 100,000 physical rows. Empty tables return zero
 counts and distributions. Statistics use the table handle's version and
 read-consistency settings.

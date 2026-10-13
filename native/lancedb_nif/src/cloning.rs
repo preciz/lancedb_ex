@@ -26,7 +26,7 @@ fn clone_table(
             (None, None) => Ref::Version(None, None),
             _ => return Err("Cannot specify both source_version and source_tag".into()),
         };
-        // LanceDB 0.37.1's clone builder drops storage options when reopening
+        // LanceDB 0.40.0's clone builder drops storage options when reopening
         // the committed clone. Clone through Lance, then use the connection's
         // ordinary open builder so endpoints, credentials and sessions survive.
         let source = OpenOptions::at(source_uri).open(&conn, &name).await?;

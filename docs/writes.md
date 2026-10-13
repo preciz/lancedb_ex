@@ -192,10 +192,10 @@ Use `LanceDB.Expr` or `{:sql, expression}` for SQL expressions. These
 expressions use the SDK's type conversion rules. Use `LanceDB.Expr` to
 combine expression values. Do not insert untrusted text into SQL strings.
 
-The current SDK cannot update rows in tables that contain blob columns. This
-includes updates to other columns. These updates return an unsupported error
-before execution. Use `upsert/3` or `merge/3` with complete records to
-replace blob rows.
+Scalar updates on tables containing blobs preserve their payloads. Direct updates
+to blob columns, including collections containing blobs, return an unsupported
+error before execution. Use `upsert/3` or `merge/3` with complete records to
+replace blob values.
 
 Without `:filter`, the operation updates **every row**. A filter with no
 matches returns `{:ok, %LanceDB.WriteResult{updated: 0, version: version}}`. Invalid options or update value structures raise `ArgumentError`. Invalid

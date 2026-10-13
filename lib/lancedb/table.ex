@@ -186,10 +186,9 @@ defmodule LanceDB.Table do
   `{:ok, %LanceDB.WriteResult{updated: count, version: version}}`.
   The version comes from the update operation, including when no rows match.
 
-  The current SDK cannot update rows in tables that contain blob columns.
-  This includes updates to other columns. These updates return an unsupported
-  error before execution. Use `upsert/3` or `merge/3` with complete records to
-  replace blob rows.
+  Scalar updates on tables containing blobs preserve their payloads. Direct updates
+  to a blob column, or a collection containing blobs, return an unsupported error
+  before execution. Use `upsert/3` or `merge/3` with complete records to replace blobs.
 
       LanceDB.Table.update(table, %{category: "code"}, filter: "id = '1'")
       LanceDB.Table.update(table, %{score: {:sql, "score + 1"}})

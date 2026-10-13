@@ -162,8 +162,7 @@ fn candidate_json(
     crate::codec::batches_to_json(vec![project(batch, &projection)?])
 }
 
-// LanceDB 0.37.1's built-in hybrid query constructs an incorrect schema when
-// only FTS returns batches. Execute both channels and align their data columns
+// Execute both channels and align their data columns, including empty results,
 // before calling the SDK's RRF reranker, which only needs ranks and row IDs.
 pub(crate) async fn hybrid_queries(
     table: &lancedb::Table,

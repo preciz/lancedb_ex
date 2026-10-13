@@ -63,7 +63,7 @@ defmodule LanceDB.TakeTest do
     offsets = [8, 2, 5, 2]
     opts = [select: [item: "id", total: "id * 2", position: "_rowoffset"], with_row_id: true]
     assert {:ok, rows} = LanceDB.Query.take_offsets(table, offsets, opts)
-    assert Enum.sort(Enum.map(rows, & &1["item"])) == [3, 6, 9]
+    assert Enum.sort(Enum.map(rows, & &1["item"])) == [3, 3, 6, 9]
     assert Enum.all?(rows, &(&1["total"] == 2 * &1["item"] and &1["position"] == &1["item"] - 1))
 
     assert Enum.to_list(
@@ -109,14 +109,14 @@ defmodule LanceDB.TakeTest do
   end
 
   property(
-    "offset retrieval returns the requested set regardless of input order or duplicates",
+    "offset retrieval preserves the requested occurrence counts",
     %{table: table}
   ) do
     check(all(offsets <- list_of(integer(0..124), max_length: 30), max_runs: 20)) do
       assert {:ok, rows} = LanceDB.Query.take_offsets(table, offsets, columns: [:id])
 
       assert Enum.sort(Enum.map(rows, & &1["id"])) ==
-               offsets |> Enum.uniq() |> Enum.map(&(&1 + 1)) |> Enum.sort()
+               offsets |> Enum.map(&(&1 + 1)) |> Enum.sort()
     end
   end
 end

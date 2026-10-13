@@ -43,7 +43,7 @@ impl UnwindSafe for TableResource {}
 impl rustler::Resource for TableResource {}
 
 impl TableResource {
-    /// LanceDB 0.37.1's merge and tag metadata paths bypass the usual write guard.
+    /// LanceDB 0.40.0's merge and tag metadata paths bypass the usual write guard.
     pub(crate) fn ensure_mutable(&self) -> Result<(), Failure> {
         crate::compat::table::ensure_mutable(&self.table)
     }

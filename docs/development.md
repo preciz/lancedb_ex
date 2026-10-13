@@ -7,6 +7,7 @@ Run all commands from the package directory.
 ## Development
 
 Use rustup so `rust-toolchain.toml` selects Rust 1.99.0, rustfmt and Clippy.
+Development source pins LanceDB 0.40.0 and Lance 13.0.0; Arrow remains on 58.
 Run these checks from the package directory. Set the source-build flag
 before you get dependencies:
 
@@ -36,6 +37,10 @@ Without `LANCEDB_BUILD=true`, tests use the published NIF. Set
 `LANCEDB_BUILD=true` before dependency resolution to check changes to Rust.
 The default suite does not need an S3 service or Phoenix application.
 CI runs the S3 suite separately.
+
+The selected public archives still contain SDK 0.37.1 until a new immutable
+native build is published and selected. Source-build validation is required for
+the SDK upgrade; passing tests with those older archives does not validate it.
 
 Integration tests check persistence, scalar and recursive schemas, searches,
 indexes, writes, ingestion, and schema evolution. They also check history,

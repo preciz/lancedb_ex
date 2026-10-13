@@ -17,6 +17,9 @@ defmodule LanceDB.TokenizerTest do
     assert {:ok, []} = LanceDB.Tokenizer.tokenize("")
     assert {:ok, []} = LanceDB.Tokenizer.tokenize("the and in")
 
+    assert {:ok, [%{"text" => "run", "position" => 0}, %{"text" => "cafe", "position" => 2}]} =
+             LanceDB.Tokenizer.tokenize("the Running in cafés")
+
     assert {:ok, [%{"text" => "MiXeD café", "position" => 0}]} =
              LanceDB.Tokenizer.tokenize("MiXeD café",
                tokenizer: :raw,
@@ -78,6 +81,19 @@ defmodule LanceDB.TokenizerTest do
              LanceDB.Tokenizer.tokenize(reopened, "Running in cafés", column: "text")
   end
 
+  test "n-gram defaults preserve terms while explicit filters still apply" do
+    opts = [tokenizer: :ngram, ngram_min_length: 7, ngram_max_length: 7]
+    assert {:ok, [%{"text" => "running"}]} = LanceDB.Tokenizer.tokenize("running", opts)
+
+    assert {:ok, [%{"text" => "run"}]} =
+             LanceDB.Tokenizer.tokenize("running", Keyword.put(opts, :stem, true))
+
+    assert {:ok, [%{"text" => "the"}]} = LanceDB.Tokenizer.tokenize("the", tokenizer: :ngram)
+
+    assert {:ok, []} =
+             LanceDB.Tokenizer.tokenize("the", tokenizer: :ngram, remove_stop_words: true)
+  end
+
   test "missing and non-FTS indexes return errors", %{table: table} do
     assert {:error, _} = LanceDB.Tokenizer.tokenize(table, "word", column: :text)
     assert {:error, _} = LanceDB.Tokenizer.tokenize(table, "word", index: "missing")
@@ -102,5 +118,34 @@ defmodule LanceDB.TokenizerTest do
 
     assert_raise ArgumentError, fn -> LanceDB.Tokenizer.tokenize("word", tokenizer: :unknown) end
     assert_raise ArgumentError, fn -> LanceDB.Tokenizer.tokenize("word", %{}) end
+  end
+
+  test "saved analyzer selectors reject ambiguity and resolve quoted nested fields", %{
+    conn: conn,
+    table: table
+  } do
+    for name <- ["first", "second"] do
+      assert {:ok, :created} =
+               LanceDB.Index.create(table, :text, type: :fts, name: name)
+    end
+
+    assert {:error, %LanceDB.Error{kind: :invalid_data, message: message}} =
+             LanceDB.Tokenizer.tokenize(table, "Running", column: :text)
+
+    assert message =~ "ambiguous"
+
+    assert {:ok, [%{"text" => "run"}]} =
+             LanceDB.Tokenizer.tokenize(table, "Running", index: "first")
+
+    {:ok, nested} =
+      LanceDB.Connection.create_table(conn, "nested", [%{info: %{"Mixed.Text" => "Running"}}],
+        schema: [info: {:struct, [{"Mixed.Text", :string}]}]
+      )
+
+    assert {:ok, :created} =
+             LanceDB.Index.create(nested, "info.`Mixed.Text`", type: :fts)
+
+    assert {:ok, [%{"text" => "run"}]} =
+             LanceDB.Tokenizer.tokenize(nested, "Running", column: "INFO.`mixed.text`")
   end
 end

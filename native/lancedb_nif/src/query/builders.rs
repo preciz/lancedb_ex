@@ -219,7 +219,10 @@ async fn prepare_vector(
         })))
     } else {
         query = crate::ranking::apply(query, &options.order_by);
-        Ok(PreparedQuery::Vector(query, projection.output))
+        Ok(PreparedQuery::Vector(
+            crate::compat::vector_query::Query::new(table, query, batch.is_some()),
+            projection.output,
+        ))
     }
 }
 

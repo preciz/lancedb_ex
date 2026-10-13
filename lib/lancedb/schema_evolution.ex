@@ -42,8 +42,8 @@ defmodule LanceDB.SchemaEvolution do
   complete lists.
   Drop indexes on converted columns before the conversion. Create the indexes
   again after the conversion. Integer overflow returns an error without a commit.
-  Float and time conversions can lose precision. Nested field casts return an
-  error because Lance 10 panics on these conversions. Casts must also keep the
+  Float and time conversions can lose precision. Nested struct fields can be
+  converted without changing their siblings. Casts must also keep the
   field's extension markers compatible with its storage type.
   The result is a WriteResult with the new version.
   """

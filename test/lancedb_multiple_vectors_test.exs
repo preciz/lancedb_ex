@@ -232,7 +232,7 @@ defmodule LanceDB.MultipleVectorsTest do
               end)
             )
 
-          assert_in_delta row["_distance"], 1 - similarity, 1.0e-5
+          assert_in_delta row["_distance"], length(query) - similarity, 1.0e-5
         end
       end)
     end

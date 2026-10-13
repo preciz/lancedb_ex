@@ -31,9 +31,9 @@ defmodule LanceDB.Schema do
   including explicit nil values. Atom/string aliases must be unique at every level.
   Lists and structs require explicit schemas; numeric-list inference remains vectors.
 
-  Lance 10 cannot store a null struct with required children, including through
-  nested struct fields. Supply a complete struct or make its child fields nullable.
-  Lance 10 also cannot cast struct update literals to required child fields;
+  A nullable struct can be nil even when its children are required. Required
+  children must be non-null whenever the parent struct is present.
+  SQL literal updates cannot cast non-null structs to required child fields;
   use `LanceDB.Table.upsert/3` or `LanceDB.Table.merge/3` with complete records
   for those columns. This also applies to field names that cannot round trip
   through Arrow's SQL type parser, such as double-quoted names; literal updates
@@ -48,7 +48,7 @@ defmodule LanceDB.Schema do
 
   Blob fields use `:blob` and accept binaries, nil, or `LanceDB.Blob.reference/1`.
   They also nest inside lists and structs. Byte fetching supports top-level and
-  struct-nested blobs; Lance 10 cannot address individual list elements by row ID.
+  struct-nested blobs; Lance 13 cannot address individual list elements by row ID.
   Table queries return small descriptors;
   retrieve bytes with `LanceDB.Blob.fetch/3`, `LanceDB.Blob.fetch_ranges/3`, or
   `LanceDB.Blob.open/3`. A descriptor cannot be written back as a blob value.
@@ -112,7 +112,7 @@ defmodule LanceDB.Schema do
 
   Arrow batches may describe custom vector item fields using
   `{:vector, dimension, %LanceDB.Field{type: :float32}}`. Table creation/evolution
-  reject nonstandard vector item names, nullability or metadata because Lance 10
+  reject nonstandard vector item names, nullability or metadata because Lance 13
   cannot persist those properties. Unsupported external Arrow types are described
   explicitly as `{:unsupported, description}` and cannot be silently recreated.
 

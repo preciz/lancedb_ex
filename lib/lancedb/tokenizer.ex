@@ -8,7 +8,8 @@ defmodule LanceDB.Tokenizer do
   @doc """
   Inspects tokens using an analyzer keyword list, with the same options as
   FTS index creation. Returns maps with string keys `"text"` and `"position"`;
-  positions start at zero and can have gaps after stop-word removal.
+  positions start at the first retained token (zero) and preserve gaps between
+  retained tokens after stop-word removal.
   Empty text is accepted. Invalid UTF-8 or options raise `ArgumentError`.
   """
   @spec tokenize(String.t(), keyword()) :: LanceDB.result([token()])

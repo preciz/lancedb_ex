@@ -20,7 +20,7 @@ defmodule LanceDB.FTS do
   `:boost` (positive float32 number, default 1), `:fuzziness` (0 default, 1, or 2),
   `:max_expansions` (positive uint32, default 50), and
   `:prefix_length` (non-negative uint32, default 0).
-  Positive prefix lengths require ASCII query text. Automatic fuzziness is
+  Prefix lengths count Unicode code points. Automatic fuzziness is
   not exposed because this SDK treats it as an exact query.
   """
   @spec match(String.t(), keyword()) :: t()
@@ -38,12 +38,9 @@ defmodule LanceDB.FTS do
     prefix_length = count!(opts, :prefix_length, 0, 0)
     text = text!(text)
 
-    if prefix_length > 0 and not String.match?(text, ~r/^[\x00-\x7F]*$/),
-      do: raise(ArgumentError, "positive prefix_length requires ASCII query text")
-
     wrap(%{
       type: :match,
-      text: text!(text),
+      text: text,
       column: column!(opts),
       operator: operator!(opts),
       boost: positive_float!(Keyword.get(opts, :boost, 1)),
@@ -53,7 +50,11 @@ defmodule LanceDB.FTS do
     })
   end
 
-  @doc "Matches a phrase. Options: `:column` and non-negative `:slop` (default 0). Requires an FTS index storing positions."
+  @doc """
+  Matches a phrase. Options: `:column` and non-negative `:slop` (default 0).
+  Existing FTS indexes must store positions. An explicit column permits scans
+  without an index; unindexed current rows are scanned unless fast search is used.
+  """
   @spec phrase(String.t(), keyword()) :: t()
   def phrase(text, opts \\ []) do
     opts = Keyword.validate!(opts, [:column, :slop])
@@ -130,15 +131,13 @@ defmodule LanceDB.FTS do
 
   @doc """
   Matches a scalar at a dotted path inside an index using `document_tokenizer: :json`.
-  Values are strings, numbers, booleans or nil. Accepts match/2 options except fuzzy matching.
+  Values are strings, numbers, booleans or nil. Accepts match/2 options; fuzzy
+  matching applies to the value while the path and scalar type remain exact.
   The pinned tokenizer cannot escape semicolons in values, or commas/semicolons in paths.
   """
   @spec json_match(String.t(), String.t() | number() | boolean() | nil, keyword()) :: t()
   def json_match(path, value, opts \\ []) do
     path = text!(path)
-
-    if Keyword.get(opts, :fuzziness, 0) != 0,
-      do: raise(ArgumentError, "JSON full-text queries do not support fuzzy matching in Lance 10")
 
     if String.contains?(path, [",", ";"]),
       do: raise(ArgumentError, "JSON query paths cannot contain commas or semicolons")

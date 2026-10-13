@@ -112,10 +112,18 @@ defmodule LanceDB.AdvancedFTSTest do
       assert_raise ArgumentError, fn -> FTS.json_match(path, value) end
     end
 
-    assert_raise ArgumentError, fn -> FTS.json_match("title", "elixr", fuzziness: 1) end
+    assert {:ok, [%{"id" => 1}]} =
+             Query.full_text_search(table, FTS.json_match("title", "elixr", fuzziness: 1),
+               columns: [:id]
+             )
+
+    assert {:ok, []} =
+             Query.full_text_search(table, FTS.json_match("titl", "elixr", fuzziness: 1),
+               columns: [:id]
+             )
   end
 
-  test "analysis contains tokenizer panics for text and hybrid queries", %{conn: conn} do
+  test "analysis reports invalid tokenizer input for text and hybrid queries", %{conn: conn} do
     {:ok, table} =
       Connection.create_table(conn, "analysis_errors", [
         %{id: 1, text: ~s({"title":"elixir"}), vector: [1, 0]}
@@ -134,8 +142,10 @@ defmodule LanceDB.AdvancedFTSTest do
               reranker: fn _, _ -> flunk("invalid input reached reranker") end
             )
           ] do
-        assert {:error, %LanceDB.Error{kind: :execution, operation: :analyze}} =
+        assert {:error, %LanceDB.Error{kind: :execution, operation: :analyze, message: message}} =
                  Query.analyze(query)
+
+        assert message =~ "Invalid triple format"
       end
     end
 

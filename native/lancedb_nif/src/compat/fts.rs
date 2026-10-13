@@ -1,4 +1,4 @@
-//! Lance 10 JSON tokenization can unwind on malformed documents or query triples.
+//! Lance 13 JSON document tokenization can unwind on malformed documents.
 //! Contain that unwind at SDK calls; ordinary errors remain unchanged.
 use crate::error::Failure;
 use futures::FutureExt;

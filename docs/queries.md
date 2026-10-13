@@ -175,8 +175,8 @@ rows =
 Both take functions accept `:columns` or `:select`, `:with_row_id`, and
 `:timeout_ms`. Input must be a list of non-negative uint64 integers. These
 functions have **no default row limit**. Empty input returns no rows.
-Duplicate identifiers do not repeat rows. Missing or deleted identifiers
-return no rows.
+Duplicate row IDs do not repeat rows; duplicate offsets retain their occurrence
+counts. Missing or deleted identifiers return no rows.
 
 These functions do not guarantee result order. Use `_rowid` to match fetched
 records with ranked search results when necessary.
@@ -527,15 +527,16 @@ SDK can mix results from different queries. Use `query_index` to match
 results to inputs. Tables with a stored column named `query_index` cannot
 use batch search.
 
-This name is reserved for metadata. The SDK provides batching for
-convenience. It does not guarantee faster execution than concurrent
-individual searches.
+This name is reserved for metadata. Float32 batches can share a flat scan.
+Float16 and float64 batches use independent typed query plans to preserve
+precision and avoid an SDK 0.40 planning panic. Performance depends on the
+index, filters, and query count.
 
 `multivector_search/3` ranks documents that each contain several embeddings,
 such as token embeddings. It returns one result set with `_distance`. Lance
-computes the score as one minus a sum. The sum contains each query
-embedding's best cosine similarity in the document. Lower scores are better.
-Distances can be negative.
+sums each query embedding's smallest cosine distance to any embedding in the
+document. Equivalently, the distance is the number of query embeddings minus
+the sum of their best cosine similarities. Lower scores are better.
 
 Cosine is the default and only supported metric.
 

@@ -11,12 +11,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = { version = "0.38.0", default-features = false, features = ["nif_version_2_15"] }
-lancedb = { version = "=0.37.1", features = ["aws", "metrics-otel"] }
-lance = { version = "=10.0.0", default-features = false }
-lance-datafusion = "=10.0.0"
-lance-index = "=10.0.0"
-lance-core = "=10.0.0"
-lance-arrow = "=10.0.0"
+# 0.40.0's job.rs references remote-gated Error::Http unconditionally.
+# Remove remote after https://github.com/lancedb/lancedb/issues/4142 is fixed.
+lancedb = { version = "=0.40.0", features = ["aws", "metrics-otel", "remote"] }
+lance = { version = "=13.0.0", default-features = false }
+lance-datafusion = "=13.0.0"
+lance-index = "=13.0.0"
+lance-core = "=13.0.0"
+lance-arrow = "=13.0.0"
 arrow = { version = "58.0.0", features = ["json"] }
 arrow-array = "58.0.0"
 arrow-schema = "58.0.0"

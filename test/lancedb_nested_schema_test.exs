@@ -167,7 +167,7 @@ defmodule LanceDB.NestedSchemaTest do
   end
 
   test(
-    "required struct children accept values and reject unsupported null parents before writing",
+    "required struct children permit null parents while rejecting null child values",
     %{db: db}
   ) do
     fields = [id: :int64, data: {:struct, [%{name: :value, type: :string, nullable: false}]}]
@@ -177,12 +177,20 @@ defmodule LanceDB.NestedSchemaTest do
     assert reason.message =~ "required child fields"
     assert {:ok, %{updated: 1}} = LanceDB.Table.upsert(table, [%{id: 1, data: %{value: "next"}}])
     assert {:ok, version} = LanceDB.History.version(table)
-    assert {:error, reason} = LanceDB.Table.add(table, [%{id: 2, data: nil}])
-    assert reason.message =~ "null struct"
-    assert {:error, reason} = LanceDB.Table.update(table, %{data: nil})
-    assert reason.message =~ "null struct"
-    assert {:ok, ^version} = LanceDB.History.version(table)
-    assert {:ok, [%{"data" => %{"value" => "next"}}]} = LanceDB.Query.query(table)
+    assert {:ok, %{inserted: 1}} = LanceDB.Table.add(table, [%{id: 2, data: nil}])
+
+    assert {:ok, [%{"data" => %{"value" => "next"}}, %{"data" => nil}]} =
+             LanceDB.Query.query(table, order_by: [asc: :id])
+
+    assert {:ok, %{updated: 2}} = LanceDB.Table.update(table, %{data: nil})
+
+    assert {:ok, [%{"data" => nil}, %{"data" => nil}]} =
+             LanceDB.Query.query(table, order_by: [asc: :id])
+
+    assert {:ok, current} = LanceDB.History.version(table)
+    assert current > version
+    assert {:error, _} = LanceDB.Table.add(table, [%{id: 3, data: %{value: nil}}])
+    assert {:ok, ^current} = LanceDB.History.version(table)
   end
 
   test("nested timestamps reject lost precision and vector children retain their validation", %{

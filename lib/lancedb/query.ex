@@ -179,7 +179,10 @@ defmodule LanceDB.Query do
   def batch_search(table, vectors, opts \\ []),
     do: all(new(table, {:batch, vectors}, opts))
 
-  @doc "Runs document multivector search immediately."
+  @doc """
+  Runs document multivector search immediately. Cosine distance is the sum,
+  over query vectors, of the smallest cosine distance to any vector in the document.
+  """
   @spec multivector_search(LanceDB.Table.t(), [[number()]], keyword()) :: LanceDB.result([map()])
   def multivector_search(table, vectors, opts \\ []),
     do: all(new(table, {:multivector, vectors}, opts))
@@ -212,7 +215,8 @@ defmodule LanceDB.Query do
 
   @doc """
   Retrieves rows by non-negative uint64 physical offsets, with the same options
-  and result-set semantics as `take_row_ids/3`. Updates, deletions, and compaction
+  as `take_row_ids/3`. Duplicate offsets repeat rows; output order is unspecified.
+  Missing offsets contribute no rows. Updates, deletions, and compaction
   can change offsets; use the same table version for collection and retrieval.
   """
   @spec take_offsets(LanceDB.Table.t(), [non_neg_integer()], keyword()) :: LanceDB.result([map()])

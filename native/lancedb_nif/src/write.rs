@@ -60,7 +60,6 @@ async fn update_rows_impl(
         .schema()
         .await
         .map_err(Failure::from_error)?;
-    crate::compat::update::validate(&schema)?;
     let mut update = table_res.table.update();
     if let Some(filter) = filter {
         update = update.only_if(filter);
@@ -69,6 +68,7 @@ async fn update_rows_impl(
         let field = schema
             .field_with_name(&column)
             .map_err(Failure::from_error)?;
+        crate::compat::update::validate(field)?;
         update = update.column(column, value.expression(field)?);
     }
     update

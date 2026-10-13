@@ -14,7 +14,7 @@ Rustler and RustlerPrecompiled are dependencies for compilation. An application
 release does not start them.
 The first source build can take a long time and use much disk space.
 
-Use the committed Cargo lockfile and the SDK version `=0.37.1`.
+Use the committed Cargo lockfile and the SDK version `=0.40.0`.
 
 ```sh
 export LANCEDB_BUILD=true

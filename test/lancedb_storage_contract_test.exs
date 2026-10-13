@@ -114,15 +114,20 @@ defmodule LanceDB.StorageContractTest do
     end
   end
 
-  test "blob table updates report their capability limit before executing", %{conn: conn} do
+  test "scalar updates preserve blobs while blob-column updates fail before execution", %{
+    conn: conn
+  } do
     {:ok, table} =
       Connection.create_table(conn, "blob_updates", [%{id: 1, value: "payload"}],
         schema: [id: :int64, value: :blob]
       )
 
+    assert {:ok, %{updated: 1}} = Table.update(table, %{id: 2})
+    {:ok, [%{"_rowid" => row_id}]} = Query.query(table, with_row_id: true)
+    assert {:ok, ["payload"]} = Blob.fetch(table, :value, [row_id])
     {:ok, version} = History.version(table)
 
-    for changes <- [%{id: 2}, %{value: nil}, %{value: "new"}] do
+    for changes <- [%{value: nil}, %{value: "new"}, %{id: 3, value: nil}] do
       assert {:error,
               %Error{
                 kind: :unsupported,
@@ -130,10 +135,11 @@ defmodule LanceDB.StorageContractTest do
               }} = Table.update(table, changes)
 
       assert {:ok, ^version} = History.version(table)
-      assert {:ok, [%{"id" => 1}]} = Query.query(table, columns: [:id])
+      assert {:ok, [%{"id" => 2}]} = Query.query(table, columns: [:id])
+      assert {:ok, ["payload"]} = Blob.fetch(table, :value, [row_id])
     end
 
-    assert {:ok, %{updated: 1}} = Table.upsert(table, [%{id: 1, value: "new"}])
+    assert {:ok, %{updated: 1}} = Table.upsert(table, [%{id: 2, value: "new"}])
   end
 
   test "map uniqueness is checked after narrowing and accepted values can be reinserted", %{

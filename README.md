@@ -7,10 +7,12 @@ Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
 
 The Elixir package version is `0.2.0`. The Rust software development kit
-(SDK) is pinned to `0.37.1`. Each native build has a separate immutable ID.
+(SDK) is pinned to `0.40.0` in development. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
 public download and production release checks on both supported Linux targets,
 including supervised table caching, background FTS warming, and shared cache reuse.
+Development SDK changes require `LANCEDB_BUILD=true` until matching native
+artifacts are published and selected; the released package uses SDK 0.37.1.
 
 ## Requirements
 

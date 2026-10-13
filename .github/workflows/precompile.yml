@@ -163,7 +163,7 @@ jobs:
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" artifacts/native-build.exs
           cp artifacts/native-build.exs native-build.exs
           cp artifacts/checksum-Elixir.LanceDB.Native.exs checksum-Elixir.LanceDB.Native.exs
-          printf 'Native source: %s\nWorkflow source: %s\nSDK: 0.37.1\nNIF ABI: 2.15\nWorkflow run: %s/%s/actions/runs/%s\n' "$SOURCE_REVISION" "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > artifacts/provenance.txt
+          printf 'Native source: %s\nWorkflow source: %s\nSDK: 0.40.0\nNIF ABI: 2.15\nWorkflow run: %s/%s/actions/runs/%s\n' "$SOURCE_REVISION" "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > artifacts/provenance.txt
       - name: Publish once under immutable source tag
         env:
           GH_TOKEN: ${{ github.token }}

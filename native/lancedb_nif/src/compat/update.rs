@@ -1,6 +1,6 @@
-//! LanceDB 0.37.1 reads blob descriptors for updates but requires logical blob input.
+//! LanceDB 0.40.0 supports scalar updates on blob tables, but not blob columns.
 use crate::error::Failure;
-use arrow_schema::{DataType, Field, Schema};
+use arrow_schema::{DataType, Field};
 
 fn contains_blob(field: &Field) -> bool {
     lancedb::blob::is_blob(field)
@@ -15,9 +15,9 @@ fn contains_blob(field: &Field) -> bool {
         }
 }
 
-pub(crate) fn validate(schema: &Schema) -> Result<(), Failure> {
-    if schema.fields().iter().any(|field| contains_blob(field)) {
-        return Err(Failure::new("unsupported", "LanceDB 0.37.1 cannot update rows in tables containing blob columns; use upsert or merge with complete records"));
+pub(crate) fn validate(field: &Field) -> Result<(), Failure> {
+    if contains_blob(field) {
+        return Err(Failure::new("unsupported", "LanceDB 0.40.0 cannot directly update columns containing blobs; use upsert or merge with complete records"));
     }
     Ok(())
 }

@@ -69,7 +69,7 @@ Use `max_rows_per_file`, `max_rows_per_group`, and `max_bytes_per_file` to
 set initial write sizes. These values must be positive uint32 integers. The
 byte limit is a target, not an absolute maximum. `data_storage_version`
 accepts `:stable`, `:next`, or `"legacy"`, `"2.0"`, `"2.1"`, `"2.2"`,
-`"2.3"`. In the current SDK, stable is 2.1 and next is 2.3.
+`"2.3"`. In the current SDK, stable and the default are 2.2 and next is 2.3.
 `enable_stable_row_ids` and `enable_v2_manifest_paths` accept explicit
 booleans.
 
@@ -80,8 +80,9 @@ settings override the related storage option keys.
 
 Declare `:blob` fields to store binary payloads with Lance blob v2. Small
 values can stay inline. Larger values use packed or dedicated sidecar files.
-Blob tables use file format 2.2 or later. They use stable row IDs by
-default. Blob fields can be nested in lists and structs.
+Blob tables use file format 2.2 or later. To retain row IDs across compaction,
+create the table with `enable_stable_row_ids: true`; blob tables no longer
+enable stable row IDs automatically. Blob fields can be nested in lists and structs.
 
 Regular queries return descriptors. To read a payload, use a fetch API.
 Fetch APIs support top-level blobs and blobs nested in structs. The pinned
@@ -239,7 +240,7 @@ default. Custom key and value `Field` definitions keep child names,
 nullability, and metadata. `{:map, entries_field}` also keeps these
 properties.
 
-Lance 10 does not support sorted Arrow maps. SQL literal updates cannot
+Lance 13 does not support sorted Arrow maps. SQL literal updates cannot
 replace complete maps. Use upsert or merge to replace a map.
 
 ```elixir
@@ -331,12 +332,11 @@ including nullability for each child. A struct must have at least one field.
 Values use maps with string or atom keys. Every child field must be present,
 including nullable children. The package rejects missing fields, extra
 fields, duplicate atom and string aliases at any depth, and incompatible
-values. Null structs are supported when their children are nullable.
+values. Nullable structs may be null even when their children are required;
+required children must be non-null when the parent is present.
 
-Lance 10 cannot store a null struct with required children, including
-through nested structs. The package rejects these literals before a write
-starts. The pinned SQL planner cannot cast struct update literals to
-required child fields. For these columns, use `upsert/3` or `Table.merge/3`
+The pinned SQL planner cannot cast non-null struct update literals to
+required child fields. To replace non-null values in these columns, use `upsert/3` or `Table.merge/3`
 with complete records. Creation, appends, and merges support required
 children. Use the same method for nested field names that Arrow's SQL type
 parser cannot keep.
@@ -537,11 +537,10 @@ Invalid casts and integer overflow fail without committing a new version.
 Floating-point narrowing and temporal conversions can lose precision. Select
 the destination type carefully.
 
-**Pinned SDK limitation:** Lance 10 panics when it rewrites an individual nested
-field's type. The package rejects nested `:type` changes before calling that
-code. Nested rename, drop, and nullability changes are supported. Top-level
-conversions of whole lists are also supported. The SDK does not support casts of
-whole structs.
+Nested struct fields support type conversions, renames, drops, and nullability
+changes. Type conversions preserve siblings, including fields with the same leaf
+name under different parents. Top-level conversions of whole lists are also
+supported. The SDK does not support casts of whole structs.
 
 Invalid argument shapes raise `ArgumentError`. Expression, schema, and SDK
 errors return `{:error, reason}`. Reopen other table handles to get the

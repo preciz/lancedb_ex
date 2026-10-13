@@ -1,4 +1,4 @@
-//! LanceDB 0.37.1 merge and tag metadata writes bypass the usual snapshot guard.
+//! LanceDB 0.40.0 merge and tag metadata writes bypass the usual snapshot guard.
 use crate::error::Failure;
 pub(crate) fn ensure_mutable(table: &lancedb::Table) -> Result<(), Failure> {
     if let Some(dataset) = table.dataset() {

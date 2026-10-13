@@ -7,7 +7,7 @@ case System.argv() do
     build = %{
       id: "0.0.0+" <> revision,
       source_revision: revision,
-      sdk_version: "0.37.1",
+      sdk_version: "0.40.0",
       repository: repository,
       tag: "native-" <> revision,
       default_url: "https://github.com/#{repository}/releases/download/native-#{revision}"
