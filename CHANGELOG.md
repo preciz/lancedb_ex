@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Separate source CI from native artifact validation. Verify selected binaries
+  on manifest updates and release tags, and require both tag workflows to pass
+  before publishing a package.
 - Give unnamed table caches distinct supervisor child IDs.
 - Count pending requests separately from finished warming records, retain bounded
   status history, and evaluate admission after prospective eviction without

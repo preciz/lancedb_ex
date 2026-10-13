@@ -64,6 +64,7 @@ defmodule LanceDB.ReleaseTest do
       JSON.encode!(%{
         "revision" => revision,
         "ci" => "success",
+        "native_ci" => "success",
         "hex" => true,
         "docs" => true,
         "github" => true
@@ -94,6 +95,8 @@ defmodule LanceDB.ReleaseTest do
     publish = Enum.find_index(calls, &(&1["args"] == ~w(hex.publish --yes)))
     consumer = Enum.find_index(calls, &(&1["tool"] == "bash"))
     create = Enum.find_index(calls, &(Enum.take(&1["args"], 2) == ~w(release create)))
+    native_ci = Enum.find_index(calls, &("native-artifacts.yml" in &1["args"]))
+    assert native_ci < publish
     assert publish < consumer and consumer < create
     assert "--verify-tag" in Enum.at(calls, create)["args"]
     assert "--latest=true" in Enum.at(calls, create)["args"]
@@ -155,6 +158,34 @@ defmodule LanceDB.ReleaseTest do
     refute publishes?(commands(context))
     assert {_, 0} = run(context)
     assert Enum.any?(commands(context), &(Enum.take(&1["args"], 2) == ~w(run watch)))
+  end
+
+  test "native artifact CI must pass for the release revision before publication", context do
+    for conclusion <- ~w(failure missing pending) do
+      change_state(context, %{"native_ci" => conclusion, "hex" => false})
+      args = if conclusion == "pending", do: ["--verify-only"], else: []
+      assert {output, 1} = run(context, args)
+      assert output =~ "native-artifacts.yml"
+      refute publishes?(commands(context))
+    end
+
+    change_state(context, %{
+      "native_ci" => "success",
+      "native_ci_revision" => String.duplicate("a", 40)
+    })
+
+    assert {output, 1} = run(context)
+    assert output =~ "Tag CI must pass before publication (native-artifacts.yml)"
+    refute publishes?(commands(context))
+  end
+
+  test "pending native artifact validation is watched before publishing", context do
+    change_state(context, %{"native_ci" => "pending", "hex" => false})
+    assert {_, 0} = run(context)
+    calls = commands(context)
+    watch = Enum.find_index(calls, &(Enum.take(&1["args"], 3) == ~w(run watch 456)))
+    publish = Enum.find_index(calls, &(&1["args"] == ~w(hex.publish --yes)))
+    assert watch < publish
   end
 
   test "an existing package with different files cannot be released", context do

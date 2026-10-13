@@ -159,10 +159,13 @@ candidate. This command must produce no differences:
 elixir scripts/check_native_build.exs
 ```
 
-Regular CI runs this check before dependency resolution or native compilation.
-It fetches full Git history so the selected source revision is available. The
-check compares committed inputs with `HEAD`; commit local changes before running
-it. Elixir-only and documentation changes do not require a native rebuild.
+The separate `native-artifacts.yml` workflow runs this check with full Git
+history before its anonymous consumer and production-release checks on both
+Linux targets. It runs on build/checksum manifest changes, `v*` tag pushes, or
+manual dispatch. Ordinary source CI builds and tests the current Rust sources
+independently, so development can proceed while new artifacts are being prepared.
+The check compares committed inputs with `HEAD`; commit local changes before
+running it. Elixir-only and documentation changes do not require a native rebuild.
 
 If it reports changes, build and verify a new immutable native release before
 selecting its manifests. Passing tests with `LANCEDB_BUILD=true` does not
@@ -214,8 +217,10 @@ checks above so Hex can generate the documentation. Hex authentication and any
 password or OTP prompts remain interactive in your terminal.
 
 The script requires a clean working tree and matching local and GitHub tags at
-`HEAD`. It checks native freshness and waits for the tag's CI run to pass before
-publication. If tag CI has not appeared yet, wait and rerun the script.
+`HEAD`. It checks native freshness and requires both tag workflows, `ci.yml` and
+`native-artifacts.yml`, to pass at that exact revision before publication. It
+waits for running checks. If either tag workflow has not appeared yet, wait and
+rerun the script.
 
 It checks that every file in the built package matches the Git tag, including
 rejecting ignored files accidentally selected for packaging. It publishes the

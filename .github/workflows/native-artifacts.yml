@@ -1,0 +1,53 @@
+name: Native artifact validation
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - native-build.exs
+      - checksum-Elixir.LanceDB.Native.exs
+  pull_request:
+    paths:
+      - native-build.exs
+      - checksum-Elixir.LanceDB.Native.exs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  freshness:
+    name: Selected native build freshness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - run: elixir scripts/check_native_build.exs
+
+  consumer:
+    name: Precompiled consumer (${{ matrix.os }})
+    needs: freshness
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - name: Verify anonymous precompiled download and production release
+        run: scripts/validate_consumer.sh

@@ -20,14 +20,10 @@ jobs:
       CARGO_BUILD_JOBS: '2'
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '29'
           elixir-version: '1.20'
-      - name: Check selected precompiled build matches committed native inputs
-        run: elixir scripts/check_native_build.exs
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy

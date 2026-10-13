@@ -23,12 +23,17 @@ fail = fn message ->
   System.halt(1)
 end
 
+native_ci? = "native-artifacts.yml" in args or Enum.at(args, 2) == "456"
+ci_key = if native_ci?, do: "native_ci", else: "ci"
+ci_id = if native_ci?, do: 456, else: 123
+conclusion = state[ci_key]
+
 ci = %{
-  "databaseId" => 123,
-  "headSha" => state["revision"],
-  "status" => if(state["ci"] == "pending", do: "in_progress", else: "completed"),
-  "conclusion" => state["ci"],
-  "url" => "https://github.com/preciz/lancedb_ex/actions/runs/123"
+  "databaseId" => ci_id,
+  "headSha" => state[ci_key <> "_revision"] || state["revision"],
+  "status" => if(conclusion == "pending", do: "in_progress", else: "completed"),
+  "conclusion" => conclusion,
+  "url" => "https://github.com/preciz/lancedb_ex/actions/runs/#{ci_id}"
 }
 
 case {tool, args} do
@@ -51,13 +56,13 @@ case {tool, args} do
     })
 
   {"gh", ["run", "list" | _]} ->
-    json.(if(state["ci"] == "missing", do: [], else: [ci]))
+    json.(if(conclusion == "missing", do: [], else: [ci]))
 
   {"gh", ["run", "view" | _]} ->
     json.(ci)
 
   {"gh", ["run", "watch" | _]} ->
-    save.(%{"ci" => "success"})
+    save.(%{ci_key => "success"})
 
   {"gh", ["release", "create", "v1.2.3" | rest]} ->
     [notes_path | _] = rest |> Enum.drop_while(&(&1 != "--notes-file")) |> tl()

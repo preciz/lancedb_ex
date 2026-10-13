@@ -130,6 +130,10 @@ defmodule LanceDB.Release do
   end
 
   defp ci!(tag, revision, verify_only?) do
+    Enum.each(~w(ci.yml native-artifacts.yml), &ci_run!(&1, tag, revision, verify_only?))
+  end
+
+  defp ci_run!(workflow, tag, revision, verify_only?) do
     runs =
       command!("gh", [
         "run",
@@ -137,7 +141,7 @@ defmodule LanceDB.Release do
         "--repo",
         @repository,
         "--workflow",
-        "ci.yml",
+        workflow,
         "--branch",
         tag,
         "--commit",
@@ -151,11 +155,15 @@ defmodule LanceDB.Release do
       ])
       |> JSON.decode!()
 
-    ensure!(runs != [], "No CI run exists for #{tag} at HEAD; wait for tag CI and rerun.")
+    ensure!(
+      runs != [],
+      "No CI run exists for #{tag} at HEAD (#{workflow}); wait for tag CI and rerun."
+    )
+
     [run] = runs
 
     if run["status"] != "completed" do
-      ensure!(!verify_only?, "Tag CI is still running: #{run["url"]}")
+      ensure!(!verify_only?, "Tag CI is still running (#{workflow}): #{run["url"]}")
 
       interactive!("gh", [
         "run",
@@ -182,7 +190,7 @@ defmodule LanceDB.Release do
     ensure!(
       run["headSha"] == revision and run["status"] == "completed" and
         run["conclusion"] == "success",
-      "Tag CI must pass before publication: #{run["url"]}"
+      "Tag CI must pass before publication (#{workflow}): #{run["url"]}"
     )
   end
 
