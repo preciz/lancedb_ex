@@ -8,15 +8,20 @@
 
 The package downloads native binaries with `rustler_precompiled` 0.10. It
 checks each archive against the committed checksum manifest. The binaries
-use NIF ABI 2.15. The package supplies binaries for these two Linux targets:
+use NIF ABI 2.15. Development builds target these four platforms:
 
 | Target | Build platform |
 | --- | --- |
 | `x86_64-unknown-linux-gnu` | Ubuntu 22.04; glibc 2.35 or later |
 | `aarch64-unknown-linux-gnu` | Ubuntu 24.04; glibc 2.39 or later |
+| `aarch64-apple-darwin` | macOS 15; Apple Silicon |
+| `x86_64-apple-darwin` | macOS 15; Intel |
 
-Use the listed Linux glibc version or a later version. Normal installation
-rejects other targets, including macOS, without compiling Rust.
+Use the listed Linux glibc or macOS version, or a later version. Normal
+installation rejects targets outside this matrix without compiling Rust.
+The released `0.2.0` package and currently selected native build contain only
+the two Linux archives. macOS requires `LANCEDB_BUILD=true` until the new
+four-platform native build passes validation and its manifests are selected.
 
 Native archives use public releases in
 [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex). Downloads use the

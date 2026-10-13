@@ -21,7 +21,7 @@ defmodule LanceDB.NativeExtractionTest do
     config = RustlerPrecompiled.Config.new(
       module: NativeExtraction.NIF, otp_app: :native_extraction,
       version: "0.0.0", force_build: false, base_url: "http://127.0.0.1/",
-      targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu),
+      targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin),
       nif_versions: ["2.15"], max_retries: 0
     )
     {:ok, metadata} = RustlerPrecompiled.build_metadata(config)

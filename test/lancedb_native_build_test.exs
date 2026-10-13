@@ -1,6 +1,8 @@
 defmodule LanceDB.NativeBuildTest do
   use ExUnit.Case, async: true
 
+  @targets ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin)
+
   setup do
     cache = Path.join(System.tmp_dir!(), "lancedb-nif-test-#{System.unique_integer([:positive])}")
     File.mkdir_p!(cache)
@@ -26,28 +28,34 @@ defmodule LanceDB.NativeBuildTest do
     refute output =~ "Compiling crate"
   end
 
-  test "only Linux archives are available and Darwin overrides never build Rust", %{cache: cache} do
+  test "Linux and macOS archive names use RustlerPrecompiled's format" do
     archives = RustlerPrecompiled.available_nifs(LanceDB.Native)
-    assert length(archives) == 2
+    assert length(archives) == length(@targets)
 
-    for target <- ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) do
+    for target <- @targets do
       assert Enum.any?(archives, fn {name, _url} ->
                String.ends_with?(name, "-nif-2.15-#{target}.so.tar.gz")
              end)
     end
+  end
 
-    for arch <- ["x86_64", "aarch64"] do
-      {output, status} =
-        compile_native(cache, [
-          {"TARGET_ARCH", arch},
-          {"TARGET_VENDOR", "apple"},
-          {"TARGET_OS", "darwin"},
-          {"TARGET_ABI", ""}
-        ])
+  test "Darwin target detection selects Intel and Apple Silicon archives" do
+    # Darwin has a three-part target with no ABI component. TARGET_* overrides
+    # on a Linux VM retain its GNU ABI and cannot model native Darwin detection.
+    for {arch, target} <- [
+          {"x86_64", "x86_64-apple-darwin"},
+          {"aarch64", "aarch64-apple-darwin"},
+          {"arm", "aarch64-apple-darwin"}
+        ] do
+      config = %{
+        os_type: {:unix, :darwin},
+        target_system: %{arch: arch, vendor: "apple", os: "darwin25.0"},
+        word_size: 8,
+        nif_version: "2.15"
+      }
 
-      assert status != 0
-      assert output =~ "precompiled NIF is not available for this target"
-      refute output =~ "Compiling crate"
+      assert {:ok, "nif-2.15-" <> ^target} =
+               RustlerPrecompiled.target(config, @targets, ["2.15"])
     end
   end
 
@@ -69,7 +77,7 @@ defmodule LanceDB.NativeBuildTest do
         base_url: build.default_url,
         version: build.id,
         force_build: false,
-        targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu),
+        targets: @targets,
         nif_versions: ["2.15"]
       )
 
@@ -98,7 +106,7 @@ defmodule LanceDB.NativeBuildTest do
           base_url: "https://example.com/native-#{revision}",
           version: "0.0.0+#{revision}",
           force_build: false,
-          targets: ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu),
+          targets: @targets,
           nif_versions: ["2.15"]
         )
       end

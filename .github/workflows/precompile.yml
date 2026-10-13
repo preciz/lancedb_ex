@@ -64,8 +64,16 @@ jobs:
         include:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            library: liblancedb_nif.so
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            library: liblancedb_nif.so
+          - os: macos-15
+            target: aarch64-apple-darwin
+            library: liblancedb_nif.dylib
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            library: liblancedb_nif.dylib
     env:
       CARGO_BUILD_JOBS: '2'
     steps:
@@ -83,12 +91,16 @@ jobs:
         with:
           workspaces: binary-source -> target
           key: precompile-${{ matrix.target }}
-      - name: Install protoc and free build disk
+      - name: Install protoc and free Linux build disk
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install protobuf
       - name: Build and test exact native source with NIF ABI 2.15
         working-directory: binary-source
         shell: bash
@@ -96,6 +108,9 @@ jobs:
           EXPECTED_TARGET: ${{ matrix.target }}
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
         run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=15.0
+          fi
           test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
           # Rustler 0.38 selects the ABI through Cargo features, not RUSTLER_NIF_VERSION.
@@ -114,8 +129,9 @@ jobs:
           NIF_TARGET: ${{ matrix.target }}
           NATIVE_VERSION: ${{ needs.prepare.outputs.version }}
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
+          NIF_LIBRARY: ${{ matrix.library }}
         run: |
-          library=binary-source/target/release/liblancedb_nif.so
+          library="binary-source/target/release/$NIF_LIBRARY"
           elixir scripts/package_nif.exs "$library" "$NIF_TARGET" "$NATIVE_VERSION" artifacts
           elixir scripts/checksums.exs artifacts checksum-Elixir.LanceDB.Native.exs
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" native-build.exs
@@ -157,7 +173,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
         run: |
-          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 2
+          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 4
           (cd artifacts && sha256sum --check *.sha256)
           elixir scripts/checksums.exs artifacts artifacts/checksum-Elixir.LanceDB.Native.exs
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" artifacts/native-build.exs
@@ -187,7 +203,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04-arm]
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

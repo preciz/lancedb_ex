@@ -116,9 +116,9 @@ Source checks and the dependent MinIO job build the current native sources with
 
 The separate `native-artifacts.yml` workflow runs when build/checksum manifests
 change, on `v*` tag pushes, or by manual dispatch. It checks source freshness,
-then verifies anonymous downloads and production releases on Linux x86_64 and
-ARM64. Native source, Cargo files, toolchain, or precompile workflow changes
-require a new verified native build before release; development source CI can
+then verifies anonymous downloads and production releases on Linux x86_64,
+Linux ARM64, Apple Silicon and Intel macOS. Native source, Cargo files, toolchain,
+or precompile workflow changes require a new verified native build before release; development source CI can
 run while those artifacts are being prepared. Elixir-only changes can retain
 the selected build.
 

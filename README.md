@@ -9,15 +9,18 @@ necessary. Supply your own vector embeddings.
 The Elixir package version is `0.2.0`. The Rust software development kit
 (SDK) is pinned to `0.40.0` in development. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
-public download and production release checks on both supported Linux targets,
+public download and production release checks on both Linux targets,
 including supervised table caching, background FTS warming, and shared cache reuse.
 Development SDK changes require `LANCEDB_BUILD=true` until matching native
 artifacts are published and selected; the released package uses SDK 0.37.1.
+Development also targets Apple Silicon and Intel Macs. Their native archives
+must pass the macOS build and consumer jobs before precompiled installation is available.
 
 ## Requirements
 
 - Elixir 1.20 or a later 1.x version. CI uses OTP 29.
 - Linux x86_64 with glibc 2.35 or later, or Linux ARM64 with glibc 2.39 or later.
+- Development macOS targets require macOS 15 or later; precompiled archives are pending.
 
 Native archives use public GitHub releases. GitHub CLI, credentials, Rust,
 and Cargo are not necessary for normal installation.

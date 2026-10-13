@@ -4,10 +4,12 @@ case System.argv() do
   [library, target, version, output] ->
     Version.parse!(version)
 
-    if target not in ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) do
+    if target not in ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin) do
       raise ArgumentError, "unsupported precompiled target: #{target}"
     end
 
+    # RustlerPrecompiled and BEAM use .so for NIFs on macOS as well as Linux.
+    # Cargo's macOS input library is a .dylib; the archive member is renamed.
     name = "liblancedb_nif-v#{version}-nif-2.15-#{target}.so"
     archive = Path.join(output, name <> ".tar.gz")
     File.mkdir_p!(output)

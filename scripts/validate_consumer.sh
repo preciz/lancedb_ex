@@ -95,9 +95,6 @@ expect_failure() {
   echo "Verified failure without Rust: $expected"
 }
 expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH=riscv64gc mix deps.compile lancedb_ex --force
-for apple_arch in x86_64 aarch64; do
-  expect_failure 'precompiled NIF is not available for this target' env TARGET_ARCH="$apple_arch" TARGET_VENDOR=apple TARGET_OS=darwin TARGET_ABI= mix deps.compile lancedb_ex --force
-done
 export RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$validation_root/unavailable-cache"
 expect_failure 'Error while downloading precompiled NIF' env LANCEDB_NIF_BASE_URL=http://127.0.0.1:1/ mix deps.compile lancedb_ex --force
 # Populate the cache with an invalid archive under the exact immutable filename.
