@@ -34,7 +34,8 @@ fn finish_drains_input_once_and_retains_the_committed_result_after_cleanup() {
             }
             assert_eq!(ids, vec![1, 2, 3]);
             Ok(42)
-        });
+        })
+        .unwrap();
         writer.push(first).await.unwrap();
         writer.push(batch(vec![3])).await.unwrap();
         let result = writer.finish().await.unwrap();
@@ -65,7 +66,8 @@ fn cancellation_of_full_input_unblocks_a_pending_push_and_prevents_successful_eo
             let error = stream.try_next().await.unwrap_err();
             assert!(stream.try_next().await.unwrap().is_none());
             Err(Failure::from_error(error))
-        });
+        })
+        .unwrap();
         writer.push(first).await.unwrap();
         let pending = writer.push(batch(vec![2]));
         tokio::pin!(pending);
@@ -99,7 +101,8 @@ fn cancel_during_finish_does_not_turn_a_full_queue_into_successful_eof() {
                 .is_some()
             {}
             Ok(99)
-        });
+        })
+        .unwrap();
         writer.push(first).await.unwrap();
         let finish = writer.finish();
         tokio::pin!(finish);
@@ -145,7 +148,8 @@ fn execution_and_commit_errors_remain_available_to_producers() {
     run(async {
         let writer = Writer::spawn(batch(vec![]).schema(), |_stream| async {
             Err("cannot open table".into())
-        });
+        })
+        .unwrap();
         assert_eq!(
             writer.outcome().await.unwrap_err(),
             Failure::from("cannot open table").executing().progress(0)
@@ -167,7 +171,8 @@ fn execution_and_commit_errors_remain_available_to_producers() {
                 .is_some()
             {}
             Err("commit failed".into())
-        });
+        })
+        .unwrap();
         writer.push(batch(vec![1])).await.unwrap();
         assert_eq!(
             writer.finish().await.unwrap_err(),
@@ -199,7 +204,8 @@ fn dropping_the_handle_cancels_input_and_waits_for_executor_cleanup_before_publi
             started.send(()).unwrap();
             stream.try_next().await.map_err(Failure::from_error)?;
             Ok(1)
-        });
+        })
+        .unwrap();
         running.await.unwrap();
         let mut terminal = writer.terminal.clone();
         assert!(terminal.borrow().is_none());
@@ -222,7 +228,8 @@ fn worker_failure_closes_completion_instead_of_hanging_the_producer() {
             panic!("simulated executor panic");
             #[allow(unreachable_code)]
             Ok(1)
-        });
+        })
+        .unwrap();
         assert_eq!(
             writer.outcome().await.unwrap_err(),
             Failure::new("execution", "Native writer task panicked")
@@ -250,7 +257,8 @@ fn successful_eof_is_repeatable_for_empty_sdk_inputs() {
                     .is_none());
             }
             Ok(7)
-        });
+        })
+        .unwrap();
         let result = writer.finish().await.unwrap();
         assert_eq!(result.version, 7);
         assert_eq!(result.inserted, 0);

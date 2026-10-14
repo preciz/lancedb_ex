@@ -67,7 +67,7 @@ async fn ingest_open_impl(
             inserted: count.load(std::sync::atomic::Ordering::Relaxed),
             version,
         }))
-    });
+    })?;
     WriterResource::start(owner, schema, worker)
 }
 
@@ -142,9 +142,6 @@ fn ingest_push_batch(
     writer.worker.check_open()?;
     let batch =
         lance_arrow::json::convert_json_columns(&batch.batch).map_err(Failure::from_error)?;
-    if writer.schema.fields() != batch.schema().fields() {
-        return Err("Batch fields do not match destination schema".into());
-    }
     crate::request::settle(env, reference, async move {
         writer.worker.push(batch).await?;
         Ok(atoms::ok())

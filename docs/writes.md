@@ -25,6 +25,15 @@ input batch separately. An empty append changes no rows. An empty overwrite
 removes all rows. `WriteResult.commits` counts insertion commits that the
 operation confirms. It does not count input batches.
 
+Native batch writes check logical values before passing each batch to the SDK.
+Imported Arrow buffers must satisfy the same finite-float, temporal-range,
+decimal-precision, vector-element, map-key, JSON-value and blob-input constraints
+as row input. Validation respects batch slices and skips children beneath null parents.
+IPC import itself checks Arrow structure; it does not make values writable.
+An invalid batch fails the current commit; previously confirmed `commit: :batch`
+commits remain. This stricter validation requires a new native build before the
+next release.
+
 Other writes report `nil` if the SDK cannot give a commit count. Public
 writes inside callbacks return the same result structs as direct calls. Each
 public API call inside a callback creates a separate telemetry span.

@@ -24,13 +24,18 @@ pub(crate) fn value(value: &Value, data_type: &DataType) -> Result<i64, Failure>
             .as_i64()
             .ok_or("Dates must be YYYY-MM-DD strings or epoch integers")?
     };
+    validate(ticks, scale)?;
+    Ok(ticks)
+}
+
+pub(crate) fn validate(ticks: i64, scale: i64) -> Result<(), Failure> {
     if ticks % scale != 0 || !(-719_162 * scale..=2_932_896 * scale).contains(&ticks) {
         return Err(
             "Dates must be whole days in years 0001–9999; date64 uses midnight epoch milliseconds"
                 .into(),
         );
     }
-    Ok(ticks)
+    Ok(())
 }
 
 #[cfg(test)]

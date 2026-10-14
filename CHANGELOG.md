@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Validate imported Arrow batches at the shared writer boundary, covering finite
+  floats, temporal ranges, decimal precision, nullability, vector elements,
+  map keys, blob inputs and JSONB payloads. Compile checks once per
+  writer and inspect only reachable values without row conversion. Guard JSONB
+  row decoding through the same traversal. Requires a new native build.
+
 - Expose `TableCache.connection/2` for shared connection access, including empty
   databases. Share supervised setup with fetch/warming requests and bound waiting
   callers through existing request limits without consuming table capacity.

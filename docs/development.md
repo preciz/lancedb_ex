@@ -51,6 +51,12 @@ raises `:badarg` for the matching NIF, while an older stub raises `:nif_not_load
 Source builds require support; unexpected errors fail verification. Consumer
 validation exercises optimization on its temporary table when support is present.
 
+Tests tagged `:native_value_validation` check stricter Arrow write validation that
+the currently selected published NIF lacks. Source builds run these tests, and
+the native packaging workflow explicitly includes them against every candidate
+binary without compiling Rust in the consumer project. To verify a matching
+precompiled build locally, run `mix test --include native_value_validation`.
+
 Rust changes require source-build validation and a new immutable native build
 before release. Passing tests with previously selected archives does not
 validate unpublished native changes.

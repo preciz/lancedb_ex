@@ -27,6 +27,7 @@ enum InputState {
 }
 
 pub(crate) struct Writer<T = WriteResult> {
+    validation: crate::batch::validation::Validation,
     input: mpsc::Sender<Input>,
     state: Mutex<InputState>,
     cancel: watch::Sender<bool>,
@@ -35,7 +36,7 @@ pub(crate) struct Writer<T = WriteResult> {
 
 #[cfg(test)]
 impl Writer {
-    pub(crate) fn spawn<F, Fut>(schema: SchemaRef, execute: F) -> Self
+    pub(crate) fn spawn<F, Fut>(schema: SchemaRef, execute: F) -> Outcome<Self>
     where
         F: FnOnce(SendableRecordBatchStream) -> Fut + Send + 'static,
         Fut: Future<Output = Result<u64, Failure>> + Send + 'static,
@@ -50,11 +51,12 @@ impl Writer {
 }
 
 impl<T: Clone + Send + Sync + 'static> Writer<T> {
-    pub(crate) fn spawn_operation<F, Fut>(schema: SchemaRef, execute: F) -> Self
+    pub(crate) fn spawn_operation<F, Fut>(schema: SchemaRef, execute: F) -> Outcome<Self>
     where
         F: FnOnce(SendableRecordBatchStream, Arc<AtomicUsize>) -> Fut + Send + 'static,
         Fut: Future<Output = Outcome<T>> + Send + 'static,
     {
+        let validation = crate::batch::validation::Validation::prepare(schema.clone())?;
         let (input, receiver) = mpsc::channel(1);
         let (cancel, cancelled) = watch::channel(false);
         let (complete, terminal) = watch::channel(None);
@@ -73,12 +75,13 @@ impl<T: Clone + Send + Sync + 'static> Writer<T> {
                     .progress(processed.load(Ordering::Relaxed))
             })));
         });
-        Self {
+        Ok(Self {
+            validation,
             input,
             state: Mutex::new(InputState::Open),
             cancel,
             terminal,
-        }
+        })
     }
 
     pub(crate) fn check_open(&self) -> Result<(), Failure> {
@@ -91,7 +94,7 @@ impl<T: Clone + Send + Sync + 'static> Writer<T> {
 
     pub(crate) async fn push(&self, batch: RecordBatch) -> Result<(), Failure> {
         self.check_open()?;
-        crate::batch::validation::validate(&batch)?;
+        self.validation.validate(&batch)?;
         if self.input.send(Input::Batch(batch)).await.is_err() {
             return Err(self
                 .outcome()

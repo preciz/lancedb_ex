@@ -31,12 +31,7 @@ pub(crate) fn value(
     timezone: Option<&str>,
 ) -> Result<i64, Failure> {
     let tz = parse_timezone(timezone)?;
-    let factor: i64 = match unit {
-        TimeUnit::Second => 1,
-        TimeUnit::Millisecond => 1_000,
-        TimeUnit::Microsecond => 1_000_000,
-        TimeUnit::Nanosecond => 1_000_000_000,
-    };
+    let factor = crate::extended_value::unit_factor(unit);
     let ticks = if let Some(ticks) = value.as_i64() {
         ticks
     } else if let Some(text) = value.as_str() {
@@ -59,12 +54,17 @@ pub(crate) fn value(
         );
     };
 
+    validate(ticks, factor)?;
+    Ok(ticks)
+}
+
+pub(crate) fn validate(ticks: i64, factor: i64) -> Result<(), Failure> {
     // Keep all accepted values readable and reusable as four-digit-year ISO strings.
     let seconds = ticks.div_euclid(factor);
     if !(-62_135_596_800..253_402_300_800).contains(&seconds) {
         return Err("Timestamp must be within years 0001 through 9999".into());
     }
-    Ok(ticks)
+    Ok(())
 }
 
 /// Render instants in UTC. Historical IANA offsets can include seconds, which

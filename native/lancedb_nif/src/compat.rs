@@ -2,6 +2,7 @@
 //! See docs/internals.md's SDK compatibility section for removal criteria.
 pub(crate) mod fts;
 pub(crate) mod ipc;
+pub(crate) mod json;
 pub(crate) mod statistics;
 pub(crate) mod storage;
 pub(crate) use statistics::training_loss;

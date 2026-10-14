@@ -7,6 +7,13 @@ defmodule LanceDB.Batch do
   `Query.stream_batches/2` and `Table.add/3` with `Source.batches/2` transfer compatible batches without row
   serialization. Conversion to Elixir maps is explicit through `to_rows/1`.
   Retaining a batch retains its Arrow buffers, including buffers shared by slices.
+
+  IPC import checks Arrow structure and preserves external values. Writing a
+  batch also checks the destination schema and logical value constraints,
+  including finite floats, temporal ranges, decimal precision and non-null
+  vector elements, without converting the batch to Elixir rows.
+  The stricter native value checks require a new matching native build before
+  the next package release; the currently selected published binary lacks them.
   """
   alias LanceDB.{Backend, Records, Result, Schema}
   @enforce_keys [:resource]

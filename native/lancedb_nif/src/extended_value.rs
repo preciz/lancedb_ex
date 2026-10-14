@@ -87,13 +87,17 @@ pub(crate) fn decimal(value: &Value, precision: u8, scale: i8) -> Result<String,
     Ok(format!("{}{digits}", if negative { "-" } else { "" }))
 }
 
-pub(crate) fn time(value: &Value, unit: &TimeUnit) -> Result<i64, Failure> {
-    let factor = match unit {
+pub(crate) fn unit_factor(unit: &TimeUnit) -> i64 {
+    match unit {
         TimeUnit::Second => 1,
         TimeUnit::Millisecond => 1_000,
         TimeUnit::Microsecond => 1_000_000,
         TimeUnit::Nanosecond => 1_000_000_000,
-    };
+    }
+}
+
+pub(crate) fn time(value: &Value, unit: &TimeUnit) -> Result<i64, Failure> {
+    let factor = unit_factor(unit);
     let ticks = if let Some(ticks) = value.as_i64() {
         ticks
     } else {
@@ -131,10 +135,15 @@ pub(crate) fn time(value: &Value, unit: &TimeUnit) -> Result<i64, Failure> {
         }
         (h * 3600 + m * 60 + s) * factor + nanos / (1_000_000_000 / factor)
     };
+    validate_time(ticks, factor)?;
+    Ok(ticks)
+}
+
+pub(crate) fn validate_time(ticks: i64, factor: i64) -> Result<(), Failure> {
     if !(0..86_400 * factor).contains(&ticks) {
         return Err("Time ticks must be within a day".into());
     }
-    Ok(ticks)
+    Ok(())
 }
 
 pub(crate) fn dictionary_value_type(value: &DataType) -> bool {

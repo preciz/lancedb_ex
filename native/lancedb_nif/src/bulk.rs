@@ -57,7 +57,7 @@ async fn create_stream_open_impl(
             .await
             .map_err(Failure::from_error)?;
         Ok(WriteOutput::Created(Arc::new(table)))
-    });
+    })?;
     WriterResource::start(owner, schema, worker)
 }
 
@@ -105,7 +105,7 @@ async fn merge_stream_open_impl(
             .await
             .map_err(Failure::from_error)?;
         Ok(WriteOutput::Merge(result.into()))
-    });
+    })?;
     WriterResource::start(owner, schema, worker)
 }
 
@@ -185,7 +185,7 @@ async fn columns_stream_open_impl(
         let version = dataset.version().version;
         table.table.dataset().unwrap().update(dataset);
         Ok(WriteOutput::Columns(version))
-    });
+    })?;
     WriterResource::start(owner, schema, worker)
 }
 

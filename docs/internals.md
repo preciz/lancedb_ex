@@ -22,6 +22,7 @@ boundaries when you change the code:
 | `FTS`, `FTS.Prepared`, and `FTS.Preparation` | Build ordinary query clauses, retain analyzed/source term associations, and validate explicit or saved preparation requests. |
 | Native `fts/preparation.rs` | Pair simple-analyzer output with source byte offsets and stop early on distinct-term limits. Reject unsupported analyzers instead of guessing token alignment. |
 | `Creation`, `Write`, `SchemaEvolution`, and `Ingestion` | Share source consumption, row and batch transport, and writer cleanup. |
+| Native `batch/validation` and `ingestion/worker` | Compile value checks, validate destination fields and reachable Arrow values, and maintain one bounded producer/commit lifecycle. |
 | `Schema`, `ArrowSchema`, and native `StorageSchema` | Separate logical definitions, physical output, and checks for stored fields. |
 | `TableCache` | Coordinate shared requests, supervised tasks, caller monitors, replies, telemetry, and rejection of stale task results. |
 | `TableCache.Entries` | Define entry reservation, request accounting, recency, eviction selection, and idle expiry without process effects. |
@@ -41,6 +42,16 @@ check JSON round trips.
 A batch slice can keep its parent buffers. The `batch_size` option limits
 returned rows. It does not limit memory use. Arrow IPC import and export
 allocate memory. Native batch transfer avoids row conversion.
+
+The native writer compiles a validation plan once from its destination schema.
+All producer formats pass through that writer, which checks field compatibility
+and validates reachable Arrow values before sending a batch to the SDK. Scalar
+checks operate on physical buffers; recursive checks respect slices and null
+parents. Calendar and time bounds share the row-normalization rules. Map-key
+canonicalization is separate from recursive traversal. IPC import remains a
+structural check, allowing inspection and export of external Arrow data.
+Row conversion uses the same recursive traversal to guard JSONB payloads before
+the SDK decoder reads them, including IPC imports and existing datasets.
 
 Each snapshot needs a separate SDK table and dataset view. An `Arc` or SDK
 table clone shares its view. The shared Tokio runtime executes native
@@ -108,6 +119,7 @@ except for Elixir builders.
 | `compat/update.rs` | Direct updates of blob columns or collections containing blobs are unsupported. Scalar updates preserve blob payloads. Storage contract tests check rejection before execution and unchanged data and version. | SDK updates accept logical blob write values. |
 | `compat/fts.rs` and `analyzer.rs` | JSON indexing can panic on invalid input. SDK token inspection discards deferred tokenizer errors; use its fallible collector with explicit or saved settings. Advanced FTS and tokenizer tests check invalid input, persisted analyzers, and selector errors. | The SDK returns typed errors for invalid input without a panic or silent empty tokens. |
 | `compat/ipc.rs` | Arrow IPC schema conversion can panic on malformed metadata. IPC safety tests check missing schema fields, invalid integer widths, and panics during iteration after a valid batch. Import returns an invalid-data error for the entire stream. | Arrow returns typed errors for malformed IPC metadata without a panic. |
+| `compat/json.rs` | Lance's JSONB decoder assumes valid UTF-8 and numeric layouts. Validate borrowed extension payloads before writes, including framing, strings, finite numbers, sorted unique object keys and bounded nesting. Arrow validation tests cover malformed imported payloads. | The SDK supplies a safe, fallible JSONB validator enforcing equivalent logical constraints. |
 | `compat/statistics.rs` | Typed statistics do not include IVF training loss for individual segments. Native tests check complete, missing, and non-finite values. | Typed SDK statistics supply the same complete loss value. |
 | `hybrid.rs` | Hybrid fusion can produce an incorrect schema when only text search returns candidates. Ranking and FTS tests check empty candidate sets. | Native hybrid queries keep matching projections for all empty candidate sets. |
 | `projection.rs` | Ordering can need columns that projection hides. Constant expressions also need physical input. Projection and ranking tests cover these cases. | The SDK planner handles these projections directly. |

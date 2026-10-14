@@ -13,9 +13,10 @@ public download and production release checks on Linux x86_64, Linux ARM64,
 and Apple Silicon macOS, including supervised table caching, background FTS
 warming, and shared cache reuse.
 
-Unreleased FTS query preparation and standard table optimization require
-`LANCEDB_BUILD=true` until a new matching native build is published and selected.
-Version `0.3.0` does not include these APIs. The unreleased table-cache connection
+Unreleased FTS query preparation, standard table optimization, and stricter
+Arrow batch write validation require `LANCEDB_BUILD=true` until a new matching
+native build is published and selected. Version `0.3.0` does not include these
+additions. The unreleased table-cache connection
 accessor works with the currently selected native binaries.
 
 ## Requirements
