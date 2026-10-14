@@ -34,7 +34,7 @@ pub(crate) fn validate_cast_type(data_type: &DataType) -> Result<(), Failure> {
         .parse::<DataType>()
         .map_err(Failure::from_error)?;
     if &parsed != data_type {
-        return Err("Nested update type cannot round trip through the Arrow SQL type parser; use upsert or merge_insert with complete records".into());
+        return Err("Nested update type cannot round trip through the Arrow SQL type parser; use Table.upsert or Table.merge with complete records".into());
     }
     Ok(())
 }

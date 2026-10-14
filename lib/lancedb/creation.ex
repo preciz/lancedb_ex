@@ -2,7 +2,7 @@ defmodule LanceDB.Creation do
   alias LanceDB.Backend.SchemaCodec
   alias LanceDB.Creation.Options, as: CreationOptions
   @moduledoc false
-  alias LanceDB.{Backend, Error, Ingestion, Options, Records, Schema}
+  alias LanceDB.{Backend, Error, Ingestion, Options, Records}
 
   @spec create(LanceDB.Connection.t(), String.t(), [map()] | LanceDB.Source.t(), keyword()) ::
           {:ok, LanceDB.Table.t()} | {:error, Error.reason()}
@@ -36,9 +36,6 @@ defmodule LanceDB.Creation do
   defp prepare(source), do: {:ok, source}
 
   defp create_batches(conn, name, batches, schema, opts) do
-    name = Options.string!(name, "table name")
-    schema = schema!(schema)
-
     metadata =
       Map.merge(
         schema.metadata,
@@ -74,7 +71,4 @@ defmodule LanceDB.Creation do
       end
     end
   end
-
-  defp schema!(%Schema{} = schema), do: schema
-  defp schema!(fields), do: Schema.new(fields)
 end

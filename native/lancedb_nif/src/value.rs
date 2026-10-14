@@ -211,7 +211,7 @@ pub(crate) fn sql_literal(value: &Value, data_type: &DataType) -> Result<String,
         }
         DataType::Struct(fields) => {
             if fields.iter().any(|field| !field.is_nullable()) {
-                return Err("SQL literals cannot cast non-null structs to required child fields; use upsert or merge_insert with complete records".into());
+                return Err("SQL literals cannot cast non-null structs to required child fields; use Table.upsert or Table.merge with complete records".into());
             }
             let values = value.as_object().ok_or("Expected struct literal")?;
             let mut arguments = Vec::new();

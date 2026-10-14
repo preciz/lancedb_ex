@@ -104,7 +104,7 @@ defmodule LanceDB.Operations.SchemaEvolution do
       if Keyword.has_key?(opts, :expected_version),
         do: Options.version!(opts[:expected_version])
 
-    wire = schema |> schema!() |> SchemaCodec.encode!()
+    wire = SchemaCodec.encode!(schema)
 
     Ingestion.run_operation(
       fn -> Backend.columns_stream_open(table, wire, version) end,
