@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add reusable FTS query preparation using explicit or saved index analyzers.
+  Preserve original spellings alongside distinct analyzed terms, build exact
+  and fuzzy alternatives per term, and support length-based typo distances,
+  exact numeric terms, scoring boosts, and input limits. Initially supports
+  plain text with the simple tokenizer. Existing string-based matches retain
+  their behavior. Requires a new native build before publication.
+
 ## 0.3.0
 
 - Upgrade to LanceDB SDK 0.40.0 and Lance 13.0.0. Enable the SDK's

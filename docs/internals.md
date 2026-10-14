@@ -19,6 +19,8 @@ boundaries when you change the code:
 | `Backend` and its codecs | Extract resource handles, encode requests, and wrap native resources. |
 | `Query.Definition`, `Controls`, and `Request` | Keep semantic controls, check combinations, and create an execution plan. |
 | `Query.Executor` | Use the same Arrow cursor for immediate and streaming reads. Keep callbacks in BEAM. |
+| `FTS`, `FTS.Prepared`, and `FTS.Preparation` | Build ordinary query clauses, retain analyzed/source term associations, and validate explicit or saved preparation requests. |
+| Native `fts/preparation.rs` | Pair simple-analyzer output with source byte offsets and stop early on distinct-term limits. Reject unsupported analyzers instead of guessing token alignment. |
 | `Creation`, `Write`, `SchemaEvolution`, and `Ingestion` | Share source consumption, row and batch transport, and writer cleanup. |
 | `Schema`, `ArrowSchema`, and native `StorageSchema` | Separate logical definitions, physical output, and checks for stored fields. |
 | `TableCache` | Coordinate shared requests, supervised tasks, caller monitors, replies, telemetry, and rejection of stale task results. |
@@ -111,6 +113,7 @@ except for Elixir builders.
 | `projection.rs` | Ordering can need columns that projection hides. Constant expressions also need physical input. Projection and ranking tests cover these cases. | The SDK planner handles these projections directly. |
 | `diagnostics.rs` | Query analysis can ignore result stream errors. Diagnostics tests check execution failures. | SDK analysis returns all result stream failures. |
 | `fts.rs` and Elixir FTS builders | Multi-match serialization does not include the operator. Default column selection misses negative leaves. FTS and tokenizer tests cover these cases. | SDK queries keep operators and select every leaf safely. |
+| `fts/preparation.rs` and Elixir prepared matches | Positive fuzzy distances use basic tokenization instead of index normalization. Retain original terms for exact clauses and analyzed terms for fuzzy alternatives. Prepared FTS tests cover case, accents, stemming, alignment, budgets, and Unicode policies. | Explicit fuzzy execution uses the saved analyzer consistently; the optional preparation API still provides reusable term inspection and composition. |
 | `value.rs` | Nested literals need array functions and explicit child casts. Struct literals cannot target required children. Nested update tests check exact values and unsupported errors. | Native literal updates keep types, names, nullability, and timestamps directly. |
 | `cloning.rs` | The SDK loses storage overrides when opening a clone. S3 clone tests check saved connection options. | SDK cloning keeps the connection configuration. |
 | `creation.rs` and `table_open.rs` | Local SDK connections discard inherited storage options for remote locations. S3 tests cover creation formats, empty tables, and overrides. | Local connections keep inherited options for all location overrides. |

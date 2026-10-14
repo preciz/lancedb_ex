@@ -95,6 +95,38 @@ try do
     IO.puts(
       "Supervised table cache, background multi-index warming and shared-cache FTS query passed."
     )
+
+    # Older Hex packages have no preparation API; newer wrappers may still
+    # select an older NIF. Only a successful native call establishes support.
+    preparation_available? =
+      if function_exported?(LanceDB.FTS, :prepare, 1) do
+        try do
+          {:ok, _} = apply(LanceDB.FTS, :prepare, [""])
+          true
+        catch
+          :error, :nif_not_loaded -> false
+        end
+      else
+        false
+      end
+
+    if preparation_available? do
+      {:ok, prepared} = apply(LanceDB.FTS, :prepare, [cached, "ELIXR", [index: "text_idx"]])
+      1 = apply(LanceDB.FTS, :term_count, [prepared])
+
+      {:ok, [%{"id" => 1}]} =
+        LanceDB.Query.full_text_search(
+          cached,
+          LanceDB.FTS.match(prepared, column: :text, fuzziness: 1),
+          columns: [:id]
+        )
+
+      {:ok, explicit} = apply(LanceDB.FTS, :prepare, ["ELIXR"])
+      ^prepared = explicit
+      IO.puts("Explicit and saved-analyzer FTS preparation and normalized fuzzy query passed.")
+    else
+      IO.puts("FTS preparation checks skipped: unavailable in this native build.")
+    end
   after
     Supervisor.stop(supervisor)
   end

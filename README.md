@@ -13,6 +13,10 @@ public download and production release checks on Linux x86_64, Linux ARM64,
 and Apple Silicon macOS, including supervised table caching, background FTS
 warming, and shared cache reuse.
 
+Unreleased FTS query preparation requires `LANCEDB_BUILD=true` until a new
+matching native build is published and selected. Version `0.3.0` does not
+include this API.
+
 ## Requirements
 
 - Elixir 1.20 or a later 1.x version. CI uses OTP 29.

@@ -8,6 +8,8 @@ use lancedb::index::scalar::{
 use lancedb::index::IndexType;
 use rustler::{Atom, Env, ResourceArc, Term};
 
+mod preparation;
+
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 pub(crate) enum TextQuery {

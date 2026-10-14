@@ -6,14 +6,48 @@ defmodule LanceDB.FTS do
   Builders return query values directly; invalid arguments raise `ArgumentError`.
   A leaf's `:column` takes precedence over the search's `:text_column` default.
   Without either, structured queries require exactly one indexed text column.
+  `prepare/2` and `prepare/3` perform optional analyzer work and return reusable
+  `LanceDB.FTS.Prepared` values for exact and fuzzy term composition.
   """
 
   import LanceDB.Options, only: [column_name!: 1, column_names!: 1]
+  alias LanceDB.FTS.{Preparation, Prepared}
 
   @enforce_keys [:query]
   defstruct [:query]
   @opaque t :: %__MODULE__{query: map()}
   @type input :: String.t() | t()
+
+  @doc """
+  Prepares plain text using an explicit `:analyzer` keyword list (SDK defaults
+  when omitted). Only `tokenizer: :simple` and plain-text documents are supported.
+
+  `:max_bytes` defaults to 2048 input bytes; `:max_terms` defaults to 32 distinct
+  analyzed terms. Set either limit to nil to disable it. Invalid arguments and
+  exceeded limits raise `ArgumentError`; native failures return `LanceDB.Error`.
+  Terms removed by stop-word or length filters are omitted. Blank or completely
+  filtered input returns an empty preparation; inspect `term_count/1` before
+  constructing a match. Existing string-based match calls are unchanged.
+  """
+  @spec prepare(String.t(), keyword()) :: LanceDB.result(Prepared.t())
+  def prepare(text, opts \\ []), do: Preparation.prepare(text, opts)
+
+  @doc """
+  Prepares text using a saved index's analyzer. Supply exactly one selector,
+  `:index` or `:column`, as a string or atom. Accepts the same limits as `prepare/2`.
+
+  Missing, ambiguous, and non-FTS indexes return errors. Saved analyzers other
+  than plain text with the simple tokenizer return an `:unsupported` error.
+  Preparation respects snapshots. Prepare again after rebuilding an index with
+  different analyzer settings; query construction does not check for changes.
+  """
+  @spec prepare(LanceDB.Table.t(), String.t(), keyword()) ::
+          LanceDB.result(Prepared.t())
+  def prepare(table, text, opts), do: Preparation.prepare(table, text, opts)
+
+  @doc "Counts distinct analyzed terms in a preparation."
+  @spec term_count(Prepared.t()) :: non_neg_integer()
+  def term_count(prepared), do: Prepared.term_count(prepared)
 
   @doc """
   Matches terms. Options: `:column`, `:operator` (`:or` default, or `:and`),
@@ -22,9 +56,32 @@ defmodule LanceDB.FTS do
   `:prefix_length` (non-negative uint32, default 0).
   Prefix lengths count Unicode code points. Automatic fuzziness is
   not exposed because this SDK treats it as an exact query.
+
+  A `LanceDB.FTS.Prepared` value adds `:exact_numbers` (true by default),
+  `:exact_boost` (positive multiplier, default 1), and
+  `fuzziness: {:length, one, two}`. Length is measured in Unicode graphemes
+  of the analyzed term: below `one` is exact-only, from `one` to below `two`
+  allows one edit, and from `two` allows two edits. Fixed distances still work.
+  Fuzziness defaults to 0 for both forms.
+
+  Each distinct term gets an exact clause using its first original spelling
+  and, when its distance is positive, a fuzzy alternative using analyzed text.
+  `:operator` combines those term groups. Decimal-digit terms stay exact when
+  `:exact_numbers` is true. `:exact_boost` multiplies `:boost` on exact clauses;
+  scoring preferences do not guarantee a global exact-first order.
+  `:max_expansions` applies separately to each fuzzy term. Prefix lengths apply
+  to analyzed text. An empty preparation raises `ArgumentError`.
   """
-  @spec match(String.t(), keyword()) :: t()
-  def match(text, opts \\ []) do
+  @spec match(String.t() | Prepared.t(), keyword()) :: t()
+  def match(text, opts \\ [])
+
+  def match(%Prepared{} = prepared, opts), do: prepared_match(prepared, opts)
+
+  def match(text, opts) do
+    wrap(Map.put(match_options!(opts), :text, text!(text)))
+  end
+
+  defp match_options!(opts) do
     opts =
       Keyword.validate!(opts, [
         :column,
@@ -35,19 +92,15 @@ defmodule LanceDB.FTS do
         :prefix_length
       ])
 
-    prefix_length = count!(opts, :prefix_length, 0, 0)
-    text = text!(text)
-
-    wrap(%{
+    %{
       type: :match,
-      text: text,
       column: column!(opts),
       operator: operator!(opts),
       boost: positive_float!(Keyword.get(opts, :boost, 1)),
       fuzziness: fuzziness!(Keyword.get(opts, :fuzziness, 0)),
       max_expansions: count!(opts, :max_expansions, 50, 1),
-      prefix_length: prefix_length
-    })
+      prefix_length: count!(opts, :prefix_length, 0, 0)
+    }
   end
 
   @doc """
@@ -131,7 +184,7 @@ defmodule LanceDB.FTS do
 
   @doc """
   Matches a scalar at a dotted path inside an index using `document_tokenizer: :json`.
-  Values are strings, numbers, booleans or nil. Accepts match/2 options; fuzzy
+  Values are strings, numbers, booleans or nil. Accepts string match/2 options; fuzzy
   matching applies to the value while the path and scalar type remain exact.
   The pinned tokenizer cannot escape semicolons in values, or commas/semicolons in paths.
   """
@@ -160,6 +213,85 @@ defmodule LanceDB.FTS do
   @spec query!(input()) :: String.t() | map()
   def query!(%__MODULE__{query: query}), do: query
   def query!(text), do: text!(text)
+
+  defp prepared_match(prepared, opts) do
+    if !Keyword.keyword?(opts),
+      do: raise(ArgumentError, "FTS match options must be a keyword list")
+
+    opts =
+      Keyword.validate!(opts, [
+        :column,
+        :operator,
+        :boost,
+        :fuzziness,
+        :max_expansions,
+        :prefix_length,
+        :exact_numbers,
+        :exact_boost
+      ])
+
+    policy = prepared_fuzziness!(Keyword.get(opts, :fuzziness, 0))
+    exact_numbers = Keyword.get(opts, :exact_numbers, true)
+
+    if !is_boolean(exact_numbers), do: raise(ArgumentError, "exact_numbers must be a boolean")
+
+    options = match_options!(Keyword.drop(opts, [:exact_numbers, :exact_boost, :fuzziness]))
+    factor = positive_float!(Keyword.get(opts, :exact_boost, 1))
+    exact_options = %{options | boost: positive_float!(options.boost * factor)}
+    terms = Prepared.terms(prepared)
+    if terms == [], do: raise(ArgumentError, "cannot match an empty FTS preparation")
+
+    clauses =
+      Enum.map(terms, &prepared_term(&1, policy, exact_numbers, options, exact_options))
+
+    case clauses do
+      [clause] -> clause
+      clauses -> boolean([{if(options.operator == :and, do: :must, else: :should), clauses}])
+    end
+  end
+
+  defp prepared_term(term, policy, exact_numbers, options, exact_options) do
+    # All original spellings produced the same indexed term. One representative
+    # avoids inflating scores for repeated input terms.
+    exact = wrap(Map.put(exact_options, :text, hd(term.originals)))
+
+    distance =
+      if exact_numbers and Enum.any?(term.originals, &Regex.match?(~r/^\p{Nd}+$/u, &1)),
+        do: 0,
+        else: prepared_distance(policy, term.analyzed)
+
+    if distance == 0,
+      do: exact,
+      else:
+        boolean(
+          should: [exact, wrap(Map.merge(options, %{text: term.analyzed, fuzziness: distance}))]
+        )
+  end
+
+  defp prepared_fuzziness!(value) when value in [0, 1, 2], do: value
+
+  defp prepared_fuzziness!({:length, one, two} = policy)
+       when is_integer(one) and is_integer(two) and one > 0 and two > one,
+       do: policy
+
+  defp prepared_fuzziness!(_),
+    do:
+      raise(
+        ArgumentError,
+        "prepared fuzziness must be 0, 1, 2, or {:length, one, two} with 0 < one < two"
+      )
+
+  defp prepared_distance({:length, one, two}, text) do
+    length = String.length(text)
+
+    cond do
+      length < one -> 0
+      length < two -> 1
+      true -> 2
+    end
+  end
+
+  defp prepared_distance(fixed, _text), do: fixed
 
   defp wrap(query), do: %__MODULE__{query: query}
   defp child!(%__MODULE__{query: query}), do: query

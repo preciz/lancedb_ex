@@ -174,6 +174,15 @@ defmodule LanceDB.Backend do
   def tokenize_table(table, text, selector, name),
     do: call(:tokenize_table, [table, text, selector, name])
 
+  @spec prepare_fts(String.t(), map(), pos_integer() | nil) :: result(String.t())
+  def prepare_fts(text, analyzer, max_terms),
+    do: call(:prepare_fts, [text, JSON.encode!(analyzer), max_terms])
+
+  @spec prepare_fts_table(Table.t(), String.t(), String.t(), String.t(), pos_integer() | nil) ::
+          result(String.t())
+  def prepare_fts_table(table, text, selector, name, max_terms),
+    do: call(:prepare_fts_table, [table, text, selector, name, max_terms])
+
   @spec prewarm_index(Table.t(), String.t()) :: result(:prewarmed)
   def prewarm_index(table, name), do: call(:prewarm_index, [table, name])
   @spec list_tags(Table.t()) :: result(String.t())

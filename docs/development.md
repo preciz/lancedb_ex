@@ -38,6 +38,13 @@ Without `LANCEDB_BUILD=true`, tests use the published NIF. Set
 The default suite does not need an S3 service or Phoenix application.
 CI runs the S3 suite separately.
 
+Tests tagged `:fts_preparation` run when the loaded NIF supports preparation.
+The currently selected public build lacks that unreleased feature, so default
+tests skip those checks. Source builds require it; packaged candidate builds
+automatically run the checks when their NIF implements it. Consumer smoke
+validation uses the same empty-analysis probe and keeps checking existing APIs
+with older native builds. Unexpected preparation errors fail verification.
+
 Rust changes require source-build validation and a new immutable native build
 before release. Passing tests with previously selected archives does not
 validate unpublished native changes.

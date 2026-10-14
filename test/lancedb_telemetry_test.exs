@@ -1,5 +1,6 @@
 defmodule LanceDB.TelemetryTest do
   use LanceDB.DataCase, async: false
+  alias LanceDB.FTS.Prepared
   alias LanceDB.Telemetry
 
   def handle_event(event, measurements, metadata, pid) do
@@ -40,6 +41,22 @@ defmodule LanceDB.TelemetryTest do
     assert_receive {[:lancedb, :operation, :stop], _, %{operation: :query, status: :ok}}
     assert [%{"id" => 1}] = LanceDB.TestSupport.rows(table) |> Enum.to_list()
     assert_receive {[:lancedb, :operation, :stop], _, %{operation: :stream_close, status: :ok}}
+  end
+
+  @tag :fts_preparation
+  test "preparation emits one span and reusable query construction performs no analysis" do
+    attach([[:lancedb, :operation, :start], [:lancedb, :operation, :stop]])
+    assert {:ok, prepared} = LanceDB.FTS.prepare("Running cafés")
+    assert_receive {[:lancedb, :operation, :start], _, %{operation: :prepare_fts}}
+    assert_receive {[:lancedb, :operation, :stop], _, %{operation: :prepare_fts, status: :ok}}
+
+    for operator <- [:and, :or] do
+      assert %LanceDB.FTS{} = LanceDB.FTS.match(prepared, operator: operator, fuzziness: 1)
+    end
+
+    assert LanceDB.FTS.term_count(prepared) == 2
+    assert length(Prepared.terms(prepared)) == 2
+    refute_received {[:lancedb, :operation, _], _, _}
   end
 
   test("native metrics are discoverable cumulative values and poll emits both metric shapes", %{

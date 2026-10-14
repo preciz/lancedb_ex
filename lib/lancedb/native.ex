@@ -456,6 +456,25 @@ defmodule LanceDB.Native do
   def tokenize_table(_table, _text, _selector, _name, _reference),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  @spec prepare_fts(String.t(), String.t(), pos_integer() | nil) :: result(String.t())
+  def prepare_fts(_text, _analyzer, _max_terms), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec prepare_fts_table(reference(), String.t(), String.t(), String.t(), pos_integer() | nil) ::
+          result(String.t())
+  def prepare_fts_table(table, text, selector, name, max_terms),
+    do: async_call(:prepare_fts_table, [table, text, selector, name, max_terms])
+
+  @spec prepare_fts_table(
+          reference(),
+          String.t(),
+          String.t(),
+          String.t(),
+          pos_integer() | nil,
+          reference()
+        ) :: result(:ok)
+  def prepare_fts_table(_table, _text, _selector, _name, _max_terms, _reference),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   @spec prewarm_index(reference(), String.t()) :: result(:prewarmed)
   def prewarm_index(table, name), do: async_call(:prewarm_index, [table, name])
 

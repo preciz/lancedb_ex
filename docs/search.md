@@ -263,6 +263,97 @@ LanceDB 0.40.0 still treats that setting as exact matching at its public query
 planning boundary. Set edit distances and
 expansion limits explicitly.
 
+## Preparing exact and fuzzy terms
+
+`FTS.prepare/2` and `/3` analyze plain text once and return a reusable
+`LanceDB.FTS.Prepared` value. Preparation uses either an explicit analyzer or
+an index's saved settings. This is useful because exact queries use the index
+analyzer, while positive fuzzy distances use basic tokenization: raw uppercase,
+accented, or unstemmed text can fail fuzzy matches even when it matches exactly.
+
+This API is unreleased and requires a source build until matching native
+archives are selected. It is not included in the published `0.3.0` package.
+
+```elixir
+alias LanceDB.{FTS, Query}
+
+# Supply exactly one saved-analyzer selector: :column or :index.
+{:ok, prepared} = FTS.prepare(table, "INTERSPRT NÜRNBRG", column: :text)
+
+if FTS.term_count(prepared) > 0 do
+  query =
+    FTS.match(prepared,
+      column: :text,
+      operator: :and,
+      fuzziness: {:length, 5, 9},
+      exact_numbers: true,
+      exact_boost: 2,
+      max_expansions: 50
+    )
+
+  {:ok, rows} = Query.full_text_search(table, query)
+end
+
+# No database access is needed with explicit analyzer settings.
+{:ok, prepared} =
+  FTS.prepare("INTERSPRT NÜRNBRG",
+    analyzer: [language: "German", remove_stop_words: false],
+    max_bytes: 2048,
+    max_terms: 32
+  )
+
+LanceDB.FTS.Prepared.terms(prepared)
+# [%{analyzed: "intersprt", originals: ["INTERSPRT"]},
+#  %{analyzed: "nurnbrg", originals: ["NÜRNBRG"]}]
+```
+
+For each distinct analyzed term, the builder combines an exact clause using
+its first original spelling with a fuzzy clause using its analyzed form. With
+AND, each term must match one of its own alternatives. With OR, any term may
+match. A zero distance creates only the exact clause. The result is an ordinary
+`FTS` query, usable in Boolean queries, hybrid search, and reusable query plans.
+The same preparation can build either operator without further tokenization.
+
+| Prepared match option | Behavior |
+| --- | --- |
+| `:fuzziness` | Defaults to 0. Accepts fixed 0, 1, or 2, or `{:length, one, two}` with `0 < one < two`. |
+| `{:length, 5, 9}` | Analyzed terms below 5 Unicode graphemes stay exact; lengths 5–8 allow one edit; lengths 9 and above allow two. Length is measured after normalization, including stemming. |
+| `:exact_numbers` | Defaults to true. Terms consisting entirely of Unicode decimal digits stay exact, including numbers beside punctuation. |
+| `:exact_boost` | Defaults to 1. A positive multiplier applied to `:boost` for exact clauses. It expresses a scoring preference and does not guarantee all exact results rank first. |
+| `:max_expansions` | Defaults to 50 and bounds vocabulary expansion separately for each fuzzy term. |
+| `:prefix_length` | Defaults to 0 and counts leading Unicode code points of the analyzed fuzzy term. |
+
+The other match options retain their usual meanings. Prepared-only options
+are rejected for string-based `FTS.match/2` calls, whose behavior is unchanged.
+Applications retain control over result filtering, ranking thresholds, and
+fallback searches. Fuzzy expansion still depends on the indexed vocabulary
+and may miss terms occurring only in unindexed rows. Exact alternatives can
+match those rows.
+
+Preparation supports plain-text documents with `tokenizer: :simple` and its
+case, accent, stemming, stop-word, and token-length filters. It rejects code,
+n-gram, raw, whitespace, and JSON analyzers. Unsupported explicit settings
+raise `ArgumentError`; unsupported saved settings return `Error.kind == :unsupported`.
+If normalization produces a term that basic fuzzy tokenization would split,
+preparation also returns `:unsupported` rather than changing its meaning.
+
+The native analyzer's byte offsets associate each retained term with its
+original spelling. Stop-word and long-token removal omit terms. Repeated
+analyzed terms become one query term while retaining their distinct original
+spellings. They do not inflate scores. Empty, blank, punctuation-only, or fully
+filtered text produces an empty preparation; matching it raises `ArgumentError`.
+
+`:max_bytes` defaults to 2048 input bytes and `:max_terms` defaults to 32 distinct
+retained analyzed terms. Limits are inclusive; nil disables either limit.
+Invalid UTF-8, invalid options, and exceeded limits raise `ArgumentError`.
+Native analyzer and storage failures return `LanceDB.Error`.
+
+Saved preparation accepts the same index/column selectors as `Tokenizer.tokenize/3`,
+including snapshots, and preserves missing, ambiguous, and non-FTS index errors.
+It retains no table handle and does not bind the query column. Use it with an
+index having the same settings. After changing an analyzer, prepare the text
+again; query construction performs no storage access or settings validation.
+
 ## Token inspection
 
 Inspect analyzer output without a table, or use an existing index's saved
