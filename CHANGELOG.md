@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose `TableCache.connection/2` for shared connection access, including empty
+  databases. Share supervised setup with fetch/warming requests and bound waiting
+  callers through existing request limits without consuming table capacity.
+
 - Add reusable FTS query preparation using explicit or saved index analyzers.
   Preserve original spellings alongside distinct analyzed terms, build exact
   and fuzzy alternatives per term, and support length-based typo distances,

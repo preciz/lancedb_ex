@@ -23,7 +23,7 @@ defmodule LanceDB.TableCache do
       since fetch/prewarm requests. Queries on returned handles are not observed.
     * `:max_opens` (default 4), `:max_warmers` (default 2) bound concurrent work.
       One warmer processes a table's requested indexes sequentially.
-    * `:max_requests` (default 256) bounds waiting fetch callers plus queued/running
+    * `:max_requests` (default 256) bounds waiting connection/fetch callers plus queued/running
       index warming requests. Saturation returns `:busy`. Finished records do not
       consume request capacity. Total retained warming records are also bounded
       by this limit; completed/failed records are discarded as needed to admit
@@ -53,6 +53,25 @@ defmodule LanceDB.TableCache do
     GenServer.start_link(__MODULE__, options, server_opts)
   end
 
+  @doc """
+  Returns the cache's shared connection, connecting lazily if necessary.
+
+  Accepts only `:timeout_ms` (default 15_000); nil waits indefinitely. This caller
+  deadline is separate from the configured native `:connect_timeout_ms`.
+  Concurrent connection, fetch and prewarm requests share one supervised attempt.
+  Timeout or caller death removes only that waiter. Failures are retryable.
+  Waiting callers consume `:max_requests`, but no table capacity or warming records.
+
+  The handle uses the cache's fixed settings and remains usable while held by a
+  caller, even after cache shutdown. A restarted cache owns a new connection.
+  Direct table operations do not register or invalidate entries; invalidate after
+  dropping, overwriting or recreating a cached table. Directly created/opened
+  handles are outside `:max_tables`; session budgets do not bound total memory.
+  """
+  @spec connection(GenServer.server(), keyword()) :: LanceDB.result(LanceDB.Connection.t())
+  def connection(server, opts \\ []),
+    do: await(server, :connection, opts, :cache_connection)
+
   @doc false
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do
@@ -75,17 +94,21 @@ defmodule LanceDB.TableCache do
   @spec fetch(GenServer.server(), String.t(), keyword()) :: LanceDB.result(LanceDB.Table.t())
   def fetch(server, name, opts \\ []) do
     name = Options.string!(name, "table name")
+    await(server, {:fetch, name}, opts, :cache_fetch)
+  end
+
+  defp await(server, request, opts, operation) do
     opts = Keyword.validate!(opts, [:timeout_ms])
     timeout = Options.timeout_ms!(Keyword.get(opts, :timeout_ms, 15_000)) || :infinity
-    request = make_ref()
+    id = make_ref()
 
-    Execution.run(:cache_fetch, fn ->
+    Execution.run(operation, fn ->
       try do
-        GenServer.call(server, {:fetch, name, request}, timeout)
+        GenServer.call(server, {request, id}, timeout)
       catch
         :exit, {:timeout, _} ->
-          GenServer.cast(server, {:forget, request})
-          {:error, failure(:timeout, "Table cache fetch timed out")}
+          GenServer.cast(server, {:forget, id})
+          {:error, failure(:timeout, "Table cache request timed out")}
       end
     end)
   end
@@ -135,6 +158,7 @@ defmodule LanceDB.TableCache do
       options: options,
       supervisor: supervisor,
       conn: nil,
+      connection_waiters: %{},
       connecting: false,
       entries: %{},
       tasks: %{},
@@ -149,7 +173,22 @@ defmodule LanceDB.TableCache do
   @impl true
   @spec handle_call(term(), GenServer.from(), state()) ::
           {:reply, term(), state()} | {:noreply, state()}
-  def handle_call({:fetch, name, request}, from, state) do
+  def handle_call({:connection, _request}, _from, %{conn: conn} = state) when conn != nil,
+    do: {:reply, {:ok, conn}, state}
+
+  def handle_call({:connection, request}, from, state) do
+    case admit(state, state.entries, 1) do
+      :ok ->
+        waiter = {from, Process.monitor(elem(from, 0))}
+        state = %{state | connection_waiters: Map.put(state.connection_waiters, request, waiter)}
+        {:noreply, dispatch(state)}
+
+      {:error, error} ->
+        {:reply, {:error, error}, state}
+    end
+  end
+
+  def handle_call({{:fetch, name}, request}, from, state) do
     state = expire(state)
 
     case state.entries[name] do
@@ -288,12 +327,20 @@ defmodule LanceDB.TableCache do
   defp reserve(state, name, extra) do
     with {:ok, entries, tick, discarded} <-
            Entries.reserve(state.entries, name, state.options.max_tables, state.tick, now()),
-         :ok <- Entries.admit(entries, extra, state.options.max_requests) do
+         :ok <- admit(state, entries, extra) do
       # Apply eviction effects only after the prospective entry set is admitted.
       discard_entry(state, discarded, :capacity)
       {:ok, %{state | entries: entries, tick: tick}}
     end
   end
+
+  defp admit(state, entries, extra),
+    do:
+      Entries.admit(
+        entries,
+        extra + map_size(state.connection_waiters),
+        state.options.max_requests
+      )
 
   defp touch(state, name) do
     {entries, tick} = Entries.touch(state.entries, name, state.tick, now())
@@ -311,7 +358,7 @@ defmodule LanceDB.TableCache do
   defp discard_entry(_state, nil, _reason), do: :ok
 
   defp discard_entry(state, {name, entry}, reason) do
-    reply_waiters(entry, {:error, failure(:cancelled, "Table cache entry was discarded")})
+    reply_waiters(entry.waiters, {:error, failure(:cancelled, "Table cache entry was discarded")})
 
     :telemetry.execute([:lancedb, :table_cache, :evict], %{count: 1}, %{
       cache_id: state.cache_id,
@@ -328,7 +375,8 @@ defmodule LanceDB.TableCache do
         {name, %{entry | waiters: waiters}}
       end)
 
-    %{state | entries: entries}
+    waiters = Map.reject(state.connection_waiters, &forget_waiter(&1, predicate))
+    %{state | entries: entries, connection_waiters: waiters}
   end
 
   defp forget_waiter({request, {_from, monitor}}, predicate) do
@@ -344,7 +392,8 @@ defmodule LanceDB.TableCache do
     pending_open = Enum.any?(state.entries, fn {_name, entry} -> entry.opening == :queued end)
 
     cond do
-      state.conn == nil and pending_open and not state.connecting ->
+      state.conn == nil and (pending_open or map_size(state.connection_waiters) > 0) and
+          not state.connecting ->
         options = state.options
         state = start_job(state, :connect, nil, nil, [], fn -> Worker.connect(options) end)
         %{state | connecting: true}
@@ -437,11 +486,14 @@ defmodule LanceDB.TableCache do
     %{state | tasks: Map.put(state.tasks, task.ref, job)}
   end
 
-  defp finish(state, %{kind: :connect}, {:ok, conn}),
-    do: %{state | conn: conn, connecting: false}
+  defp finish(state, %{kind: :connect}, {:ok, conn}) do
+    reply_waiters(state.connection_waiters, {:ok, conn})
+    %{state | conn: conn, connecting: false, connection_waiters: %{}}
+  end
 
   defp finish(state, %{kind: :connect}, {:error, error}) do
-    state = %{state | connecting: false}
+    reply_waiters(state.connection_waiters, {:error, error})
+    state = %{state | connecting: false, connection_waiters: %{}}
 
     Enum.reduce(state.entries, state, fn {name, entry}, state ->
       if entry.table == nil, do: open_failed(state, name, entry, error), else: state
@@ -459,7 +511,7 @@ defmodule LanceDB.TableCache do
   end
 
   defp finish_entry(state, %{kind: :open, name: name}, entry, {:ok, table}) do
-    reply_waiters(entry, {:ok, table})
+    reply_waiters(entry.waiters, {:ok, table})
     put_entry(state, name, %{entry | table: table, opening: nil, waiters: %{}})
   end
 
@@ -495,7 +547,7 @@ defmodule LanceDB.TableCache do
   end
 
   defp open_failed(state, name, entry, error) do
-    reply_waiters(entry, {:error, error})
+    reply_waiters(entry.waiters, {:error, error})
 
     if map_size(entry.warming) == 0 do
       %{state | entries: Map.delete(state.entries, name)}
@@ -509,8 +561,8 @@ defmodule LanceDB.TableCache do
     end
   end
 
-  defp reply_waiters(entry, result) do
-    Enum.each(entry.waiters, fn {_request, {from, monitor}} ->
+  defp reply_waiters(waiters, result) do
+    Enum.each(waiters, fn {_request, {from, monitor}} ->
       Process.demonitor(monitor, [:flush])
       GenServer.reply(from, result)
     end)

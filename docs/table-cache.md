@@ -27,7 +27,7 @@ children = [
 Supervisor.start_link(children, strategy: :one_for_one)
 ```
 
-Storage opens lazily on the first fetch or warming request. Every instance owns
+Storage connects lazily on the first connection, fetch or warming request. Every instance owns
 one connection and SDK session with fixed storage, cache and consistency settings.
 Use separate named instances for incompatible settings. Each BEAM node owns its
 own instance. There is no distributed coordination or automatic index creation.
@@ -49,12 +49,48 @@ child ID independently of process registration, use
 | `idle_timeout_ms` | `3_600_000` | Expire entries idle since fetch/prewarm; `nil` disables expiry. |
 | `max_opens` | `4` | Concurrent table opens. |
 | `max_warmers` | `2` | Concurrent table warming tasks. |
-| `max_requests` | `256` | Waiting fetch callers plus queued/running index requests; also bounds total retained warming records. |
+| `max_requests` | `256` | Waiting connection/fetch callers plus queued/running index requests; also bounds total retained warming records. |
 
 Limits and non-nil idle intervals must be positive uint32 integers. Cache budgets,
 consistency intervals and native deadlines have the same ranges as
 [connection/open controls](tables.md#table-open-controls-and-listing).
 Unknown options raise `ArgumentError` before storage work begins.
+
+## Using the shared connection
+
+```elixir
+alias LanceDB.{Connection, TableCache}
+
+{:ok, conn} = TableCache.connection(MyApp.TableCache, timeout_ms: 10_000)
+{:ok, _} = Connection.create_table(conn, "documents", [%{id: 1, text: "Example document"}])
+{:ok, table} = TableCache.fetch(MyApp.TableCache, "documents")
+{:ok, names} = Connection.table_names(conn)
+```
+
+`connection/2` works on empty databases, returns the retained connection, and shares
+one supervised connection attempt with pending fetch and prewarm requests. It opens
+no tables, reserves no table entry, and does not evict entries, touch their idle/LRU
+activity, or alter warming records. Only `timeout_ms` is accepted: the default is
+15,000 milliseconds and `nil` waits indefinitely. This caller deadline includes
+waiting for setup and is separate from the configured native `connect_timeout_ms`.
+Timeout or caller death removes only that waiter; shared setup continues and its
+successful result is retained. Connection failures and worker crashes reach all
+affected callers and mark queued warming requests failed. Later requests can retry.
+
+The returned native handle is shareable between processes. Its fixed storage,
+consistency and session cache settings match the cache. Tables created or opened
+through it share that session unless per-open cache budgets select a separate one.
+Direct create/open calls do not register handles with `TableCache`; `max_tables`
+bounds only entries managed by the cache. Session cache budgets do not bound total
+native memory.
+
+Direct writes do not invalidate retained entries or warming records. Explicitly
+invalidate after dropping, overwriting or recreating a cached table. Existing
+handles still follow their configured read-consistency policy.
+
+Stopping the cache releases its references and stops its task supervisor. It does
+not revoke handles already returned to callers. A restarted cache owns a new
+connection/session; callers retaining the previous handle keep its old session.
 
 ## Fetching and warming
 
@@ -133,11 +169,11 @@ Idle expiry runs periodically and on fetch, prewarm and status calls. Queries on
 returned handles do not refresh cache activity. Status inspection also does not
 keep an entry alive. Warming alone does not protect an entry from eviction.
 
-`max_requests` bounds waiting fetch callers plus queued/running index requests.
+`max_requests` bounds waiting connection/fetch callers plus queued/running index requests.
 Completed and failed attempts release request capacity. Request admission is
 checked against the prospective entries after any capacity eviction; rejected
 requests leave existing entries and their status intact. Saturation returns
-`:busy`. Already-retained handles remain fetchable without adding a waiter.
+`:busy`. Already-retained connections and tables remain available without adding a waiter.
 
 Total retained warming records are independently bounded by the same limit.
 New warming requests can discard completed/failed records, starting with the

@@ -53,6 +53,16 @@ try do
     )
 
   try do
+    if function_exported?(LanceDB.TableCache, :connection, 1) do
+      {:ok, conn} = apply(LanceDB.TableCache, :connection, [cache])
+      {:ok, ^conn} = apply(LanceDB.TableCache, :connection, [cache, [timeout_ms: 10_000]])
+      {:ok, _} = LanceDB.Connection.create_table(conn, "from_cache", [%{id: 3}])
+      {:ok, created} = LanceDB.TableCache.fetch(cache, "from_cache")
+      {:ok, [%{"id" => 3}]} = LanceDB.Query.query(created)
+      {:ok, ["from_cache", "items"]} = LanceDB.Connection.table_names(conn)
+      IO.puts("Shared cache connection, direct creation and cached fetch passed.")
+    end
+
     {:ok, :scheduled} = LanceDB.TableCache.prewarm(cache, "items", indexes: indexes)
     {:ok, cached} = LanceDB.TableCache.fetch(cache, "items", timeout_ms: 10_000)
     deadline = System.monotonic_time(:millisecond) + 10_000

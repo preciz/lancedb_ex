@@ -15,7 +15,8 @@ warming, and shared cache reuse.
 
 Unreleased FTS query preparation requires `LANCEDB_BUILD=true` until a new
 matching native build is published and selected. Version `0.3.0` does not
-include this API.
+include this API. The unreleased table-cache connection accessor works with the
+currently selected native binaries.
 
 ## Requirements
 

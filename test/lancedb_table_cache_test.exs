@@ -24,6 +24,231 @@ defmodule LanceDB.TableCacheTest do
     %{conn: conn, table: table}
   end
 
+  test "connection access is lazy, works on empty storage and creates no table entry", %{
+    path: path
+  } do
+    cache = cache(Path.join(path, "empty"), max_tables: 1, max_requests: 1)
+    assert :sys.get_state(cache).conn == nil
+    assert :sys.get_state(cache).tasks == %{}
+    assert {:ok, conn} = TableCache.connection(cache)
+    assert {:ok, ^conn} = TableCache.connection(cache, timeout_ms: nil)
+    assert {:ok, []} = Connection.table_names(conn)
+    assert :sys.get_state(cache).entries == %{}
+    assert :sys.get_state(cache).connection_waiters == %{}
+
+    assert {:ok, _} = Connection.create_table(conn, "created", [%{id: 1}])
+    assert :sys.get_state(cache).entries == %{}
+    assert {:ok, table} = TableCache.fetch(cache, "created")
+    assert {:ok, [%{"id" => 1}]} = Query.query(table)
+  end
+
+  test "connection, fetch and warming callers share a single supervised attempt", %{path: path} do
+    cache = cache(path, max_requests: 5)
+    handler = block(cache, :cache_connect, nil)
+    connections = for _ <- 1..3, do: Task.async(fn -> TableCache.connection(cache) end)
+    assert_receive {:blocked, worker}, 2_000
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 3 end)
+    fetched = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+
+    assert_eventually(fn ->
+      map_size(get_in(:sys.get_state(cache), [:entries, "docs", :waiters]) || %{}) == 1
+    end)
+
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    before = :sys.get_state(cache)
+    assert {:error, %Error{kind: :busy}} = TableCache.connection(cache)
+    assert {:error, %Error{kind: :busy}} = TableCache.fetch(cache, "other")
+    assert {:error, %Error{kind: :busy}} = TableCache.prewarm(cache, "docs", indexes: [:titles])
+    assert :sys.get_state(cache).entries == before.entries
+    assert map_size(:sys.get_state(cache).tasks) == 1
+    refute_receive {:blocked, _}, 50
+    :telemetry.detach(handler)
+    send(worker, :continue)
+
+    [conn] =
+      Enum.uniq(
+        Enum.map(connections, fn task ->
+          assert {:ok, conn} = Task.await(task)
+          conn
+        end)
+      )
+
+    assert {:ok, ^conn} = TableCache.connection(cache)
+    assert {:ok, _} = Task.await(fetched)
+    await_warmed(cache, "docs", ["words"])
+    assert :sys.get_state(cache).connection_waiters == %{}
+  end
+
+  test "connection timeout and caller death release capacity without cancelling shared work", %{
+    path: path
+  } do
+    cache = cache(path, max_requests: 2)
+    handler = block(cache, :cache_connect, nil)
+    timed = Task.async(fn -> TableCache.connection(cache, timeout_ms: 100) end)
+    assert_receive {:blocked, worker}, 2_000
+    survivor = Task.async(fn -> TableCache.connection(cache, timeout_ms: nil) end)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 2 end)
+    assert {:error, %Error{kind: :busy}} = TableCache.connection(cache)
+    assert {:error, %Error{kind: :timeout, operation: :cache_connection}} = Task.await(timed)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 1 end)
+    dead = spawn(fn -> TableCache.connection(cache, timeout_ms: nil) end)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 2 end)
+    Process.exit(dead, :kill)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 1 end)
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    assert {:error, %Error{kind: :busy}} = TableCache.fetch(cache, "docs")
+    assert Process.alive?(worker)
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    assert {:ok, conn} = Task.await(survivor)
+    assert {:ok, ^conn} = TableCache.connection(cache)
+    await_warmed(cache, "docs", ["words"])
+    assert :sys.get_state(cache).connection_waiters == %{}
+  end
+
+  test "an abandoned connection attempt settles once and retains its result", %{path: path} do
+    cache = cache(path, max_requests: 1)
+    handler = block(cache, :cache_connect, nil)
+    timed = Task.async(fn -> TableCache.connection(cache, timeout_ms: 50) end)
+    assert_receive {:blocked, worker}, 2_000
+    assert {:error, %Error{kind: :timeout}} = Task.await(timed)
+    assert_eventually(fn -> :sys.get_state(cache).connection_waiters == %{} end)
+    assert :sys.get_state(cache).entries == %{}
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    assert_eventually(fn -> :sys.get_state(cache).conn != nil end)
+    conn = :sys.get_state(cache).conn
+    assert {:ok, ^conn} = TableCache.connection(cache)
+    assert :sys.get_state(cache).tasks == %{}
+  end
+
+  test "connection worker crashes fail all affected requests and allow retry", %{path: path} do
+    cache = cache(path)
+    handler = block(cache, :cache_connect, nil)
+    connections = for _ <- 1..3, do: Task.async(fn -> TableCache.connection(cache) end)
+    assert_receive {:blocked, worker}, 2_000
+    fetched = Task.async(fn -> TableCache.fetch(cache, "docs") end)
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 3 end)
+
+    assert_eventually(fn ->
+      map_size(get_in(:sys.get_state(cache), [:entries, "docs", :waiters]) || %{}) == 1
+    end)
+
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    :telemetry.detach(handler)
+    Process.exit(worker, :kill)
+
+    for task <- [fetched | connections],
+        do: assert({:error, %Error{kind: :execution}} = Task.await(task))
+
+    assert {:ok, %{"words" => %Warming{status: :failed}}} = TableCache.status(cache, "docs")
+    assert :sys.get_state(cache).connection_waiters == %{}
+    assert {:ok, _} = TableCache.connection(cache)
+    assert {:ok, _} = TableCache.fetch(cache, "docs")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+  end
+
+  test "native connection failures reach all waiters and the next request retries", %{path: path} do
+    uri = Path.join(path, "blocked_database")
+    File.write!(uri, "a file cannot be a database directory")
+    cache = cache(uri)
+    handler = block(cache, :cache_connect, nil)
+    callers = for _ <- 1..3, do: Task.async(fn -> TableCache.connection(cache) end)
+    assert_receive {:blocked, worker}, 2_000
+    assert_eventually(fn -> map_size(:sys.get_state(cache).connection_waiters) == 3 end)
+    fetched = Task.async(fn -> TableCache.fetch(cache, "created") end)
+
+    assert_eventually(fn ->
+      map_size(get_in(:sys.get_state(cache), [:entries, "created", :waiters]) || %{}) == 1
+    end)
+
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "created", indexes: [:words])
+    :telemetry.detach(handler)
+    send(worker, :continue)
+    results = Enum.map(callers, &Task.await/1)
+    assert [{:error, %Error{kind: kind, operation: :cache_connection}}] = Enum.uniq(results)
+    assert {:error, %Error{kind: ^kind, operation: :cache_fetch}} = Task.await(fetched)
+
+    assert {:ok, %{"words" => %Warming{status: :failed, error: %Error{kind: ^kind}}}} =
+             TableCache.status(cache, "created")
+
+    assert :sys.get_state(cache).connection_waiters == %{}
+    assert :sys.get_state(cache).conn == nil
+    File.rm!(uri)
+    assert {:ok, conn} = TableCache.connection(cache)
+    assert {:ok, []} = Connection.table_names(conn)
+    assert {:ok, _} = Connection.create_table(conn, "created", [%{id: 1, text: "created"}])
+    assert {:ok, _} = TableCache.fetch(cache, "created")
+  end
+
+  test "direct and cached handles share configured caches without changing cache entries", %{
+    path: path
+  } do
+    cache =
+      cache(path,
+        max_tables: 1,
+        index_cache_size_bytes: 16 * 1024 * 1024,
+        metadata_cache_size_bytes: 0
+      )
+
+    {:ok, cached} = TableCache.fetch(cache, "docs")
+    assert {:ok, :scheduled} = TableCache.prewarm(cache, "docs", indexes: [:words])
+    await_warmed(cache, "docs", ["words"])
+    before = :sys.get_state(cache)
+    {:ok, conn} = TableCache.connection(cache)
+    assert :sys.get_state(cache) == before
+    {:ok, direct} = Connection.open_table(conn, "docs")
+    {:ok, created} = Connection.create_table(conn, "outside", [%{id: 1, text: "outside"}])
+    {:ok, :created} = Index.create(created, :text, type: :fts, name: "outside_words")
+    {:ok, _} = Query.full_text_search(created, "outside", columns: [:id])
+    {:ok, stats} = Table.cache_stats(cached)
+    assert stats["index"]["num_entries"] > 0
+    assert stats["metadata"]["num_entries"] == 0
+    assert {:ok, ^stats} = Table.cache_stats(direct)
+    assert {:ok, ^stats} = Table.cache_stats(created)
+    assert :sys.get_state(cache) == before
+    assert {:ok, ^cached} = TableCache.fetch(cache, "docs")
+  end
+
+  test "held connection survives restart and direct replacement requires explicit invalidation",
+       %{
+         path: path
+       } do
+    id = make_ref()
+    opts = [uri: path, read_consistency_interval_ms: 0]
+    cache = start_supervised!(Supervisor.child_spec({TableCache, opts}, id: id))
+    {:ok, conn} = TableCache.connection(cache)
+    {:ok, table} = TableCache.fetch(cache, "docs")
+    assert :ok = stop_supervised(id)
+    assert {:ok, _} = Connection.table_names(conn)
+    assert {:ok, 100} = Table.count_rows(table)
+    replacement = start_supervised!(Supervisor.child_spec({TableCache, opts}, id: id))
+    {:ok, fresh} = TableCache.connection(replacement)
+    assert fresh != conn
+    {:ok, cached} = TableCache.fetch(replacement, "docs")
+    assert {:ok, :dropped} = Connection.drop_table(fresh, "docs")
+    assert {:ok, _} = Connection.create_table(fresh, "docs", [%{id: 999}])
+    assert :sys.get_state(replacement).entries["docs"].table == cached
+    assert :ok = TableCache.invalidate(replacement, "docs")
+    assert {:ok, reopened} = TableCache.fetch(replacement, "docs")
+    assert reopened != cached
+    assert {:ok, [%{"id" => 999}]} = Query.query(reopened)
+  end
+
+  test "connection options are validated without contacting the server" do
+    for opts <- [
+          [timeout_ms: 0],
+          [timeout_ms: -1],
+          [timeout_ms: "5"],
+          [timeout_ms: 4_294_967_296],
+          [index_cache_size_bytes: 0],
+          [storage_options: %{}]
+        ] do
+      assert_raise ArgumentError, fn -> TableCache.connection(:missing, opts) end
+    end
+  end
+
   test "shares concurrent opens and a slow table does not block another table", %{path: path} do
     cache = cache(path)
     handler = block(cache, :cache_open, "docs")
