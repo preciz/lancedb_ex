@@ -96,7 +96,6 @@ defmodule LanceDB.Native do
       x86_64-unknown-linux-gnu
       aarch64-unknown-linux-gnu
       aarch64-apple-darwin
-      x86_64-apple-darwin
     )
 
   @spec blob_columns(reference()) :: result([String.t()])

@@ -71,9 +71,6 @@ jobs:
           - os: macos-15
             target: aarch64-apple-darwin
             library: liblancedb_nif.dylib
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            library: liblancedb_nif.dylib
     env:
       CARGO_BUILD_JOBS: '2'
     steps:
@@ -173,7 +170,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ needs.prepare.outputs.revision }}
         run: |
-          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 4
+          test "$(find artifacts -name '*.so.tar.gz' | wc -l)" -eq 3
           (cd artifacts && sha256sum --check *.sha256)
           elixir scripts/checksums.exs artifacts artifacts/checksum-Elixir.LanceDB.Native.exs
           elixir scripts/native_build.exs "$SOURCE_REVISION" "$GITHUB_REPOSITORY" artifacts/native-build.exs
@@ -203,7 +200,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

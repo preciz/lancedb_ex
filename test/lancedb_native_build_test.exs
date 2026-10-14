@@ -1,7 +1,7 @@
 defmodule LanceDB.NativeBuildTest do
   use ExUnit.Case, async: true
 
-  @targets ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin)
+  @targets ~w(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin)
 
   setup do
     cache = Path.join(System.tmp_dir!(), "lancedb-nif-test-#{System.unique_integer([:positive])}")
@@ -39,11 +39,10 @@ defmodule LanceDB.NativeBuildTest do
     end
   end
 
-  test "Darwin target detection selects Intel and Apple Silicon archives" do
+  test "Darwin target detection selects Apple Silicon archives" do
     # Darwin has a three-part target with no ABI component. TARGET_* overrides
     # on a Linux VM retain its GNU ABI and cannot model native Darwin detection.
     for {arch, target} <- [
-          {"x86_64", "x86_64-apple-darwin"},
           {"aarch64", "aarch64-apple-darwin"},
           {"arm", "aarch64-apple-darwin"}
         ] do
@@ -57,6 +56,18 @@ defmodule LanceDB.NativeBuildTest do
       assert {:ok, "nif-2.15-" <> ^target} =
                RustlerPrecompiled.target(config, @targets, ["2.15"])
     end
+  end
+
+  test "Intel Darwin targets are unsupported" do
+    config = %{
+      os_type: {:unix, :darwin},
+      target_system: %{arch: "x86_64", vendor: "apple", os: "darwin25.0"},
+      word_size: 8,
+      nif_version: "2.15"
+    }
+
+    assert {:error, reason} = RustlerPrecompiled.target(config, @targets, ["2.15"])
+    assert reason =~ "precompiled NIF is not available for this target"
   end
 
   test "unavailable download fails without building Rust", %{cache: cache} do

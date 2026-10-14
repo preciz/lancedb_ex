@@ -4,9 +4,9 @@
 
 - Restore native runtime libraries after source CI cache hits by forcing package
   compilation in both source and MinIO jobs while retaining Cargo's build cache.
-- Add Apple Silicon and Intel macOS targets to native builds and anonymous
+- Add Apple Silicon macOS targets to native builds and anonymous
   production consumer validation. Require macOS 15 or later; public archives
-  are pending a new verified four-platform native build.
+  are pending a new verified three-platform native build.
 - Upgrade source builds to LanceDB SDK 0.40.0 and Lance 13.0.0. Enable the SDK's
   `remote` feature to work around its upstream job compilation bug.
 - Support nested struct field casts, Unicode fuzzy prefixes, and JSON fuzzy

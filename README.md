@@ -13,7 +13,7 @@ public download and production release checks on both Linux targets,
 including supervised table caching, background FTS warming, and shared cache reuse.
 Development SDK changes require `LANCEDB_BUILD=true` until matching native
 artifacts are published and selected; the released package uses SDK 0.37.1.
-Development also targets Apple Silicon and Intel Macs. Their native archives
+Development also targets Apple Silicon Macs. Their native archives
 must pass the macOS build and consumer jobs before precompiled installation is available.
 
 ## Requirements

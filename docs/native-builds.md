@@ -54,14 +54,14 @@ gh run list --workflow precompile.yml
 The workflow checks out that source revision separately from the workflow
 code. It builds with `cargo build --locked` and runs tests with
 `cargo test --locked`. It checks Rustler Cargo features for NIF ABI 2.15.
-It also checks that the build did not change `Cargo.lock`. All four targets
+It also checks that the build did not change `Cargo.lock`. All three targets
 must pass the package tests with their packaged NIF before publication.
 Linux x86_64 uses Ubuntu 22.04.
 
 Linux ARM64 uses Ubuntu 24.04.
 
-Apple Silicon uses `macos-15`; Intel uses `macos-15-intel`. Both build natively
-with `MACOSX_DEPLOYMENT_TARGET=15.0` and require macOS 15 or later. Install
+Apple Silicon uses `macos-15` and builds natively
+with `MACOSX_DEPLOYMENT_TARGET=15.0`, requiring macOS 15 or later. Install
 `protoc` with Homebrew on macOS. Cargo produces `liblancedb_nif.dylib`; the
 packager renames it to the `.so` archive member expected by BEAM and
 RustlerPrecompiled on macOS. All platforms use `.so.tar.gz` archive names.
@@ -144,15 +144,15 @@ elixir scripts/checksums.exs /tmp/lancedb-local-artifacts /tmp/lancedb-local-che
 ```
 
 On macOS, pass `target/release/liblancedb_nif.dylib` and the matching
-`aarch64-apple-darwin` or `x86_64-apple-darwin` target. A local archive does
-not substitute for the four-target workflow or its trusted combined
+`aarch64-apple-darwin` target. A local archive does
+not substitute for the three-target workflow or its trusted combined
 manifest. The local packager refuses to replace an existing archive or
 checksum file. Build distributed binaries on their intended minimum OS version.
 
 ## Preparing a package release
 
 Use the public repository `preciz/lancedb_ex`. First publish and verify the
-Linux and macOS native archives for all four targets. Commit their matching
+Linux and macOS native archives for all three targets. Commit their matching
 build and checksum manifests.
 Then update the release status and installation examples in the README and
 installation guide. Remove the changelog's unreleased marker and pending-build
