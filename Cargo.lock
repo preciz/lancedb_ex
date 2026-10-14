@@ -3986,7 +3986,6 @@ dependencies = [
  "lance-datafusion",
  "lance-index",
  "lancedb",
- "lazy_static",
  "rustler",
  "serde",
  "serde_json",

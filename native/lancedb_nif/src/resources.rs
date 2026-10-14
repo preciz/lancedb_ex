@@ -1,12 +1,10 @@
 use crate::error::Failure;
-use lazy_static::lazy_static;
 use std::panic::{RefUnwindSafe, UnwindSafe};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::runtime::Runtime;
 
-lazy_static! {
-    pub(crate) static ref RUNTIME: Runtime = Runtime::new().expect("Failed to start Tokio runtime");
-}
+pub(crate) static RUNTIME: LazyLock<Runtime> =
+    LazyLock::new(|| Runtime::new().expect("Failed to start Tokio runtime"));
 
 pub(crate) mod atoms {
     rustler::atoms! {
