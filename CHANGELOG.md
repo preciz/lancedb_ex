@@ -2,28 +2,48 @@
 
 ## Unreleased
 
-- Validate imported Arrow batches at the shared writer boundary, covering finite
-  floats, temporal ranges, decimal precision, nullability, vector elements,
-  map keys, blob inputs and JSONB payloads. Compile checks once per
-  writer and inspect only reachable values without row conversion. Guard JSONB
-  row decoding through the same traversal. Requires a new native build.
-- Isolate fresh consumer verification from inherited Mix environment, target,
-  project, build and dependency paths so custom maintainer settings cannot
-  redirect the temporary project's compilation or release.
-
 - Expose `TableCache.connection/2` for shared connection access, including empty
   databases. Share supervised setup with fetch/warming requests and bound waiting
   callers through existing request limits without consuming table capacity.
 - Add `Maintenance.optimize/1` for the standard SDK compaction, seven-day cleanup,
   and index optimization sequence. Return compaction and cleanup statistics under
-  one native write-admission permit. Requires a new native build before publication.
-
+  one native write-admission permit.
 - Add reusable FTS query preparation using explicit or saved index analyzers.
   Preserve original spellings alongside distinct analyzed terms, build exact
   and fuzzy alternatives per term, and support length-based typo distances,
   exact numeric terms, scoring boosts, and input limits. Initially supports
   plain text with the simple tokenizer. Existing string-based matches retain
-  their behavior. Requires a new native build before publication.
+  their behavior.
+- Validate imported Arrow batches at the shared writer boundary, covering finite
+  floats, temporal ranges, decimal precision, nullability, vector elements,
+  map keys, blob inputs and JSONB payloads. Compile checks once per writer and
+  inspect only reachable values without row conversion. Guard JSONB row decoding
+  through the same traversal.
+- Isolate fresh consumer verification from inherited Mix environment, target,
+  project, build and dependency paths so custom maintainer settings cannot
+  redirect the temporary project's compilation or release.
+- Gate unreleased FTS preparation and standard optimization checks on native
+  support. Run Arrow value-validation regressions in source builds and explicitly
+  include them for every packaged candidate native binary.
+- Initialize the shared native runtime with Rust's standard `LazyLock`, removing
+  the native crate's direct `lazy_static` dependency.
+- Remove redundant table-name and source-schema normalization, unused formatter
+  and package-ignore entries, and obsolete `merge_insert` advice in write errors.
+  Error messages now point to `Table.upsert` and `Table.merge`.
+
+FTS query preparation, standard table optimization and stricter Arrow validation
+require a new matching native build before publication. `TableCache.connection/2`
+works with the currently selected native binaries.
+
+### Breaking changes
+
+- Native Arrow batch writes reject values that violate the logical schema,
+  including inputs previously accepted by some write paths. Invalid values are
+  rejected before the batch reaches the SDK; earlier confirmed `commit: :batch`
+  commits remain. Review external Arrow producers against the schema's value
+  constraints before upgrading.
+- JSONB row conversion rejects malformed payloads before invoking the SDK
+  decoder, returning an invalid-data error instead of passing corrupt data to it.
 
 ## 0.3.0
 
