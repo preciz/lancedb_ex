@@ -137,6 +137,31 @@ try do
     else
       IO.puts("FTS preparation checks skipped: unavailable in this native build.")
     end
+
+    optimization_available? =
+      if function_exported?(LanceDB.Native, :optimize, 2) do
+        try do
+          apply(LanceDB.Native, :optimize, [nil, make_ref()])
+          raise "Native optimization accepted an invalid table resource"
+        catch
+          :error, :badarg -> true
+          :error, :nif_not_loaded -> false
+        end
+      else
+        false
+      end
+
+    if optimization_available? do
+      {:ok, %{"compaction" => compaction, "cleanup" => cleanup}} =
+        apply(LanceDB.Maintenance, :optimize, [cached])
+
+      true = is_integer(compaction["fragments_removed"])
+      0 = cleanup["old_versions"]
+      {:ok, 2} = LanceDB.Table.count_rows(cached)
+      IO.puts("Standard table optimization, statistics and retained rows passed.")
+    else
+      IO.puts("Standard optimization checks skipped: unavailable in this native build.")
+    end
   after
     Supervisor.stop(supervisor)
   end

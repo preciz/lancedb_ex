@@ -1,4 +1,4 @@
-defmodule LanceDB.PreparationGatingTest do
+defmodule LanceDB.NativeCapabilityGatingTest do
   use ExUnit.Case, async: true
 
   test "matching native builds enable preparation checks in both build modes" do
@@ -6,6 +6,7 @@ defmodule LanceDB.PreparationGatingTest do
       {output, status} = helper(:available, source_build)
       assert status == 0, output
       assert output =~ "preparation enabled"
+      assert output =~ "optimization enabled"
     end
   end
 
@@ -25,7 +26,23 @@ defmodule LanceDB.PreparationGatingTest do
     assert output =~ "Unexpected preparation failure"
   end
 
-  defp helper(support, source_build) do
+  test "missing optimization skips only its checks and fails source verification" do
+    {output, status} = helper(:available, nil, :missing)
+    assert status == 0, output
+    assert output =~ "preparation enabled"
+    assert output =~ "optimization skipped"
+    {output, status} = helper(:available, "true", :missing)
+    assert status != 0
+    assert output =~ "Source build is missing standard optimization"
+  end
+
+  test "unexpected optimization errors fail verification" do
+    {output, status} = helper(:available, nil, :broken)
+    assert status != 0
+    assert output =~ "Unexpected optimization failure"
+  end
+
+  defp helper(support, source_build, optimization \\ :available) do
     code = """
     Code.compiler_options(ignore_module_conflict: true)
     defmodule LanceDB.FTS do
@@ -37,12 +54,26 @@ defmodule LanceDB.PreparationGatingTest do
         end
       end
     end
+    defmodule LanceDB.Native do
+      def optimize(nil, _reference) do
+        case #{inspect(optimization)} do
+          :available -> :erlang.error(:badarg)
+          :missing -> :erlang.nif_error(:nif_not_loaded)
+          :broken -> raise "Unexpected optimization failure"
+        end
+      end
+    end
     Code.require_file("test/test_helper.exs")
     excluded = ExUnit.configuration()[:exclude]
     if :fts_preparation in excluded do
       IO.puts("preparation skipped")
     else
       IO.puts("preparation enabled")
+    end
+    if :standard_optimization in excluded do
+      IO.puts("optimization skipped")
+    else
+      IO.puts("optimization enabled")
     end
     """
 

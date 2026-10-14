@@ -3,6 +3,10 @@ defmodule LanceDB.Operations.Maintenance do
   @moduledoc false
   alias LanceDB.{Backend, Options, Result}
 
+  @spec optimize(LanceDB.Table.t()) ::
+          LanceDB.Native.result(map()) | {:error, JSON.decode_error_reason()}
+  def optimize(table), do: Result.decode(Backend.optimize(table))
+
   @spec table_stats(LanceDB.Table.t()) ::
           LanceDB.Native.result(map()) | {:error, JSON.decode_error_reason()}
   def table_stats(table), do: Result.decode(Backend.table_stats(table))

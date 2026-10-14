@@ -3,6 +3,36 @@ use crate::resources::{atoms, TableResource};
 use rustler::{Atom, Env, ResourceArc, Term};
 
 #[rustler::nif(schedule = "DirtyCpu")]
+fn optimize(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        let stats = table
+            .table
+            .optimize(lancedb::table::OptimizeAction::All)
+            .await
+            .map_err(|error| {
+                let message = format!("Failed to optimize table: {error}");
+                Failure::write_error(error).context(message)
+            })?;
+        let compaction = stats.compaction.ok_or_else(|| {
+            Failure::new("execution", "Missing compaction statistics").executing()
+        })?;
+        let cleanup = stats
+            .prune
+            .ok_or_else(|| Failure::new("execution", "Missing cleanup statistics").executing())?;
+        Ok(serde_json::json!({
+            "compaction": compaction_stats(compaction),
+            "cleanup": cleanup_stats(cleanup),
+        })
+        .to_string())
+    })
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 fn table_stats(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -77,13 +107,7 @@ fn compact_files(
                 Failure::from_error(e).context(message)
             })?;
         let stats = stats.compaction.ok_or("Missing compaction statistics")?;
-        Ok(serde_json::json!({
-            "fragments_removed": stats.fragments_removed,
-            "fragments_added": stats.fragments_added,
-            "files_removed": stats.files_removed,
-            "files_added": stats.files_added,
-        })
-        .to_string())
+        Ok(compaction_stats(stats).to_string())
     })
 }
 
@@ -120,15 +144,27 @@ fn cleanup_old_versions(
                 Failure::from_error(e).context(message)
             })?;
         let stats = stats.prune.ok_or("Missing cleanup statistics")?;
-        Ok(serde_json::json!({
-            "bytes_removed": stats.bytes_removed,
-            "old_versions": stats.old_versions,
-            "data_files_removed": stats.data_files_removed,
-            "transaction_files_removed": stats.transaction_files_removed,
-            "index_files_removed": stats.index_files_removed,
-            "deletion_files_removed": stats.deletion_files_removed,
-        })
-        .to_string())
+        Ok(cleanup_stats(stats).to_string())
+    })
+}
+
+fn compaction_stats(stats: lance::dataset::optimize::CompactionMetrics) -> serde_json::Value {
+    serde_json::json!({
+        "fragments_removed": stats.fragments_removed,
+        "fragments_added": stats.fragments_added,
+        "files_removed": stats.files_removed,
+        "files_added": stats.files_added,
+    })
+}
+
+fn cleanup_stats(stats: lance::dataset::cleanup::RemovalStats) -> serde_json::Value {
+    serde_json::json!({
+        "bytes_removed": stats.bytes_removed,
+        "old_versions": stats.old_versions,
+        "data_files_removed": stats.data_files_removed,
+        "transaction_files_removed": stats.transaction_files_removed,
+        "index_files_removed": stats.index_files_removed,
+        "deletion_files_removed": stats.deletion_files_removed,
     })
 }
 

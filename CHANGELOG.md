@@ -5,6 +5,9 @@
 - Expose `TableCache.connection/2` for shared connection access, including empty
   databases. Share supervised setup with fetch/warming requests and bound waiting
   callers through existing request limits without consuming table capacity.
+- Add `Maintenance.optimize/1` for the standard SDK compaction, seven-day cleanup,
+  and index optimization sequence. Return compaction and cleanup statistics under
+  one native write-admission permit. Requires a new native build before publication.
 
 - Add reusable FTS query preparation using explicit or saved index analyzers.
   Preserve original spellings alongside distinct analyzed terms, build exact

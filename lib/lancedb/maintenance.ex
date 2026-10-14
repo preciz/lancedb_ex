@@ -5,6 +5,28 @@ defmodule LanceDB.Maintenance do
   @type table :: LanceDB.Table.t()
   @type result(value) :: LanceDB.result(value)
   @doc """
+  Runs standard maintenance: compact files, prune versions older than seven days,
+  then optimize existing indexes, using LanceDB 0.40.0's defaults.
+
+  Returns a string-keyed map with `"compaction"` (fragment/file counts) and
+  `"cleanup"` (the same removal counts as `cleanup_old_versions/2`). Index
+  optimization adds unindexed data without creating missing indexes or retraining
+  vector models. Tagged old versions cause an error; recent unverified files
+  remain protected. Use the individual operations for custom retention or options.
+
+  Cleanup is irreversible. Retention must exceed the lifetime of readers and
+  writers using old versions. The steps are not one transaction: earlier changes
+  remain if a later step fails. Errors do not include a structured failed phase
+  or partial statistics. Schedule and coordinate maintenance in the application.
+  Storage runs asynchronously under one native write-admission permit; caller
+  death does not cancel a mutation already admitted.
+  """
+  @spec optimize(table()) :: result(%{String.t() => %{String.t() => non_neg_integer()}})
+  def optimize(table) do
+    LanceDB.Execution.run(:optimize, fn -> Maintenance.optimize(table) end)
+  end
+
+  @doc """
   Returns table statistics as a map with string keys.
 
   Includes `num_rows`, `num_indices`, `total_bytes`, and `fragment_stats` with

@@ -23,8 +23,23 @@ preparation_available? =
 if source_build? and !preparation_available?,
   do: raise("Source build is missing FTS preparation; recompile the native library")
 
+# Invalid resource arguments are rejected by Rustler before admission or storage.
+# A registered NIF raises :badarg; the older stub raises :nif_not_loaded.
+optimization_available? =
+  try do
+    LanceDB.Native.optimize(nil, make_ref())
+    raise "Native optimization accepted an invalid table resource"
+  catch
+    :error, :badarg -> true
+    :error, :nif_not_loaded -> false
+  end
+
+if source_build? and !optimization_available?,
+  do: raise("Source build is missing standard optimization; recompile the native library")
+
 exclude = [:s3]
 exclude = if source_build?, do: exclude, else: [:source_build | exclude]
 exclude = if preparation_available?, do: exclude, else: [:fts_preparation | exclude]
+exclude = if optimization_available?, do: exclude, else: [:standard_optimization | exclude]
 
 ExUnit.start(exclude: exclude, max_cases: 8)

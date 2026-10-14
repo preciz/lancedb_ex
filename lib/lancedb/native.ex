@@ -326,6 +326,12 @@ defmodule LanceDB.Native do
   @spec drop_index(reference(), String.t(), reference()) :: result(:ok)
   def drop_index(_table, _name, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
+  @spec optimize(reference()) :: result(String.t())
+  def optimize(table), do: async_call(:optimize, [table])
+
+  @spec optimize(reference(), reference()) :: result(:ok)
+  def optimize(_table, _reference), do: :erlang.nif_error(:nif_not_loaded)
+
   @spec optimize_indices(reference(), String.t()) :: result(:optimized)
   def optimize_indices(table, options), do: async_call(:optimize_indices, [table, options])
 

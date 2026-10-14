@@ -109,6 +109,9 @@ defmodule LanceDB.Backend do
   @spec drop_index(Table.t(), String.t()) :: result(:dropped)
   def drop_index(table, name), do: call(:drop_index, [table, name])
 
+  @spec optimize(Table.t()) :: result(String.t())
+  def optimize(table), do: call(:optimize, [table])
+
   @spec optimize_indices(Table.t(), map()) :: result(:optimized)
   def optimize_indices(table, options),
     do: call(:optimize_indices, [table, JSON.encode!(options)])

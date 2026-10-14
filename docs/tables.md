@@ -275,6 +275,11 @@ Run maintenance after batches of writes, according to your application's
 workload:
 
 ```elixir
+# Standard SDK pass: compact, clean up history older than seven days, then optimize indexes.
+{:ok, %{"compaction" => compaction, "cleanup" => cleanup}} =
+  LanceDB.Maintenance.optimize(table)
+
+# Or select individual operations and customize their settings:
 # Merge small fragments while preserving current data and schema.
 {:ok, compaction} = LanceDB.Maintenance.compact_files(table)
 # Optional target size (rows, not bytes):
@@ -293,6 +298,32 @@ workload:
 These operations return synchronously to the Elixir caller while native work
 runs on Tokio and replies by message. Storage waits retain no BEAM scheduler.
 Schedule maintenance in your application; the package does not schedule it.
+
+`optimize/1` wraps LanceDB 0.40.0's `OptimizeAction::All` under one native write
+admission permit for the entire pass. Its fixed order is file compaction with SDK
+defaults, cleanup of versions older than seven days, and optimization of existing
+indexes with SDK defaults. It preserves current rows and schema, creates no missing
+indexes, and does not request vector retraining. Use the individual operations
+below for different settings or retention.
+
+The result is a string-keyed map. `"compaction"` contains `"fragments_removed"`,
+`"fragments_added"`, `"files_removed"`, and `"files_added"`; `"cleanup"` contains
+the same removal statistics as `cleanup_old_versions/2`. Compaction counts describe
+rewrites, not necessarily files physically deleted. Successful cleanup may remove
+nothing when every version is recent.
+
+The cleanup defaults match `cleanup_old_versions/2`: tagged old versions cause an
+error and recent unverified files retain the SDK's seven-day protection window.
+Cleanup is irreversible; seven days is suitable only when it exceeds the lifetime
+of readers and writers using old versions. Coordinate maintenance and writes in
+your application. The pass is not one transaction and has no rollback: compaction
+can complete before cleanup or index optimization fails. Failures return a
+`LanceDB.Error` without a structured failed phase or statistics for completed steps.
+Caller death does not cancel an admitted write; native admission remains held
+until the SDK operation settles.
+
+This unreleased operation requires `LANCEDB_BUILD=true` until matching native
+binaries are published and selected. It is absent from Hex version `0.3.0`.
 
 `compact_files/2` defaults to 1,048,576 target rows per fragment. It uses
 the SDK's other compaction defaults, including index remapping. Its result

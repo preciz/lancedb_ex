@@ -189,6 +189,10 @@ methods enter their canonical span once. Successful events do not include
 records, SQL, credentials, or table handles. Exception metadata can contain
 user data in reasons or stacktraces.
 
+Maintenance emits spans for `optimize`, `compact_files`, `cleanup_old_versions`,
+and `optimize_indices`. A standard `optimize` pass emits one public span; its
+internal SDK phases do not emit separate operation spans.
+
 The optional table cache emits operation spans for `cache_connection`, `cache_fetch`,
 `cache_prewarm`, `cache_status`, and its `cache_connect`, `cache_open`, and
 `cache_warm` workers. Worker metadata includes `cache_id`, `table_name`,
