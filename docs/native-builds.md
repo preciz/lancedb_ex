@@ -168,7 +168,7 @@ elixir scripts/check_native_build.exs
 ```
 
 The separate `native-artifacts.yml` workflow runs this check with full Git
-history before its anonymous consumer and production-release checks on all four
+history before its anonymous consumer and production-release checks on all three
 Linux and macOS targets. It runs on build/checksum manifest changes, `v*` tag
 pushes, or manual dispatch. Ordinary source CI builds and tests the current Rust sources
 independently, so development can proceed while new artifacts are being prepared.
@@ -214,8 +214,8 @@ After all checks pass, tag and push the package source, then run the release
 script from that checkout:
 
 ```sh
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin main v0.2.0
+git tag -a v0.3.0 -m "Release v0.3.0"
+git push origin main v0.3.0
 elixir scripts/release.exs
 ```
 

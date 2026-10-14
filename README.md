@@ -6,21 +6,18 @@ This package embeds [LanceDB](https://lancedb.com/) in Elixir through Rustler.
 Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
 
-The Elixir package version is `0.2.0`. The Rust software development kit
-(SDK) is pinned to `0.40.0` in development. Each native build has a separate immutable ID.
+The Elixir package version is `0.3.0`. The Rust software development kit
+(SDK) is pinned to `0.40.0`. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
-public download and production release checks on both Linux targets,
-including supervised table caching, background FTS warming, and shared cache reuse.
-Development SDK changes require `LANCEDB_BUILD=true` until matching native
-artifacts are published and selected; the released package uses SDK 0.37.1.
-Development also targets Apple Silicon Macs. Their native archives
-must pass the macOS build and consumer jobs before precompiled installation is available.
+public download and production release checks on Linux x86_64, Linux ARM64,
+and Apple Silicon macOS, including supervised table caching, background FTS
+warming, and shared cache reuse.
 
 ## Requirements
 
 - Elixir 1.20 or a later 1.x version. CI uses OTP 29.
 - Linux x86_64 with glibc 2.35 or later, or Linux ARM64 with glibc 2.39 or later.
-- Development macOS targets require macOS 15 or later; precompiled archives are pending.
+- Apple Silicon Macs with macOS 15 or later.
 
 Native archives use public GitHub releases. GitHub CLI, credentials, Rust,
 and Cargo are not necessary for normal installation.
@@ -32,7 +29,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.2.0"}
+    {:lancedb_ex, "~> 0.3.0"}
   ]
 end
 ```
@@ -95,7 +92,7 @@ for session sharing, option ranges, and examples.
 
 ## Supervised table caching
 
-Version `0.2.0` includes an optional cache for applications that retain
+The optional table cache supports applications that retain
 handles and warm indexes in the background. Add it to your supervision tree:
 
 ```elixir

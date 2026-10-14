@@ -38,9 +38,9 @@ Without `LANCEDB_BUILD=true`, tests use the published NIF. Set
 The default suite does not need an S3 service or Phoenix application.
 CI runs the S3 suite separately.
 
-The selected public archives still contain SDK 0.37.1 until a new immutable
-native build is published and selected. Source-build validation is required for
-the SDK upgrade; passing tests with those older archives does not validate it.
+Rust changes require source-build validation and a new immutable native build
+before release. Passing tests with previously selected archives does not
+validate unpublished native changes.
 
 Integration tests check persistence, scalar and recursive schemas, searches,
 indexes, writes, ingestion, and schema evolution. They also check history,
@@ -151,7 +151,7 @@ scripts/test_s3.sh
 
 The script downloads the pinned MinIO release from its official GitHub
 assets and verifies it against a committed SHA256 digest. It supports the
-same two Linux platforms as the NIF and caches the verified binary under
+two Linux platforms in the native-build matrix and caches the verified binary under
 `_build/minio`. The server binds to localhost on an ephemeral port, uses
 temporary data and test credentials, and is stopped on exit. Failed runs
 print its logs before cleanup. Docker, an AWS account, and GitHub secrets

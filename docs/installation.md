@@ -8,7 +8,7 @@
 
 The package downloads native binaries with `rustler_precompiled` 0.10. It
 checks each archive against the committed checksum manifest. The binaries
-use NIF ABI 2.15. Development builds target these three platforms:
+use NIF ABI 2.15 and support these three platforms:
 
 | Target | Build platform |
 | --- | --- |
@@ -18,9 +18,6 @@ use NIF ABI 2.15. Development builds target these three platforms:
 
 Use the listed Linux glibc or macOS version, or a later version. Normal
 installation rejects targets outside this matrix without compiling Rust.
-The released `0.2.0` package and currently selected native build contain only
-the two Linux archives. macOS requires `LANCEDB_BUILD=true` until the new
-three-platform native build passes validation and its manifests are selected.
 
 Native archives use public releases in
 [preciz/lancedb_ex](https://github.com/preciz/lancedb_ex). Downloads use the
@@ -39,7 +36,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.2.0"}
+    {:lancedb_ex, "~> 0.3.0"}
   ]
 end
 ```
@@ -56,10 +53,8 @@ tree entry. Applications using the optional [table cache](table-cache.md)
 supervise that component themselves.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
-default artifact URL. The Elixir package version is `0.2.0`. The released
-package uses SDK `0.37.1`; development source pins `=0.40.0`.
-Use `LANCEDB_BUILD=true` to test development source until new matching native
-artifacts are published and selected. These versions do not identify the
+default artifact URL. The Elixir package version is `0.3.0`, and the
+package uses SDK `0.40.0`. These versions do not identify the
 wrapper binary. Each native build has the SemVer version
 `0.0.0+<full-source-revision>`.
 
@@ -71,14 +66,14 @@ release.
 ### Current native build
 
 The selected native build is
-[`0.0.0+34de6e78a241d5776a072fff6d20c1ce8d856929`](https://github.com/preciz/lancedb_ex/releases/tag/native-34de6e78a241d5776a072fff6d20c1ce8d856929).
+[`0.0.0+0e89cc70c0553e0dcf6a017e3129c4a91939700d`](https://github.com/preciz/lancedb_ex/releases/tag/native-0e89cc70c0553e0dcf6a017e3129c4a91939700d).
 Its exact source revision is
-[`34de6e78a241d5776a072fff6d20c1ce8d856929`](https://github.com/preciz/lancedb_ex/commit/34de6e78a241d5776a072fff6d20c1ce8d856929).
-It uses SDK `0.37.1` and NIF ABI `2.15`, and includes the scheduler fix shipped in `0.2.0`.
+[`0e89cc70c0553e0dcf6a017e3129c4a91939700d`](https://github.com/preciz/lancedb_ex/commit/0e89cc70c0553e0dcf6a017e3129c4a91939700d).
+It uses SDK `0.40.0` and NIF ABI `2.15`.
 
-Both Linux targets passed their Rust and Elixir tests. The
-[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38255855355)
-also checked fresh consumers on both targets. Each consumer downloaded the
+All three targets passed their Rust and Elixir tests. The
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38545308686)
+also checked fresh consumers on all three targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
 and completed a write and query without Rust or credentials. The checks also
 verified connect/open deadlines, initial connection cache budgets, cache
@@ -88,7 +83,7 @@ FTS queries, and a production application release on each target.
 To use the released source with its verified archives, pin the Git dependency:
 
 ```elixir
-{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.2.0"}
+{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.3.0"}
 ```
 
 Then run `mix deps.get` and `mix compile`. This installation uses the

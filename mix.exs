@@ -2,7 +2,7 @@ defmodule LanceDB.MixProject do
   use Mix.Project
 
   @force_build? System.get_env("LANCEDB_BUILD") in ["1", "true"]
-  @version "0.2.0"
+  @version "0.3.0"
   @source_url "https://github.com/preciz/lancedb_ex"
 
   def project do

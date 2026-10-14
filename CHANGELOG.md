@@ -1,14 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-- Restore native runtime libraries after source CI cache hits by forcing package
-  compilation in both source and MinIO jobs while retaining Cargo's build cache.
-- Add Apple Silicon macOS targets to native builds and anonymous
-  production consumer validation. Require macOS 15 or later; public archives
-  are pending a new verified three-platform native build.
-- Upgrade source builds to LanceDB SDK 0.40.0 and Lance 13.0.0. Enable the SDK's
+- Upgrade to LanceDB SDK 0.40.0 and Lance 13.0.0. Enable the SDK's
   `remote` feature to work around its upstream job compilation bug.
+- Add Apple Silicon macOS support with precompiled binaries and anonymous
+  production consumer validation. Require macOS 15 or later.
 - Support nested struct field casts, Unicode fuzzy prefixes, and JSON fuzzy
   values while preserving exact JSON paths/types, removing the
   corresponding Lance 10 compatibility guards. New tables default to file format
@@ -29,6 +26,8 @@
 - Separate source CI from native artifact validation. Verify selected binaries
   on manifest updates and release tags, and require both tag workflows to pass
   before publishing a package.
+- Restore native runtime libraries after source CI cache hits by forcing package
+  compilation in both source and MinIO jobs while retaining Cargo's build cache.
 - Give unnamed table caches distinct supervisor child IDs.
 - Count pending requests separately from finished warming records, retain bounded
   status history, and evaluate admission after prospective eviction without
@@ -38,6 +37,22 @@
   planning and counts, blobs, index operations, maintenance, and writer
   backpressure and cleanup. Reads cancel on caller death; writes retain admission
   until SDK settlement. Public synchronous return values remain unchanged.
+
+### Breaking changes
+
+- New blob tables no longer enable stable row IDs automatically. Use
+  `enable_stable_row_ids: true` when retaining row IDs across compaction.
+- `Query.take_offsets/3` now repeats rows for duplicate offsets. Deduplicate
+  input offsets explicitly when one result per offset is required.
+- Multivector cosine distances now sum each query vector's minimum cosine
+  distance to the document. Review thresholds based on the old score scale.
+- Token positions begin at the first retained term. N-gram analyzers disable
+  stemming and stop-word removal by default; set these filters explicitly to
+  retain the previous analyzer behavior.
+- Phrase searches include unindexed current rows by default. Use
+  `fast_search: true` to search only indexed rows.
+- Blob seeks and reads retain positions beyond EOF rather than clamping them
+  to the payload length.
 
 ## 0.2.0
 
