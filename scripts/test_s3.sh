@@ -70,6 +70,7 @@ minio_pid=$!
 
 export LANCEDB_TEST_S3_ENDPOINT="http://127.0.0.1:$minio_port"
 export LANCEDB_TEST_S3_URI="s3://lancedb-ci/integration"
+export LANCEDB_TEST_S3_SECONDARY_URI="s3://lancedb-ci-clone/integration"
 export LANCEDB_TEST_S3_ACCESS_KEY="lancedb-test"
 export LANCEDB_TEST_S3_SECRET_KEY="lancedb-test-secret"
 
@@ -91,11 +92,13 @@ if [[ "$minio_ready" != true ]]; then
 fi
 
 # Older curl versions omit the ephemeral port when signing Host.
-curl --fail-with-body --silent --show-error --max-time 10 \
-  --aws-sigv4 "aws:amz:us-east-1:s3" \
-  --user "$LANCEDB_TEST_S3_ACCESS_KEY:$LANCEDB_TEST_S3_SECRET_KEY" \
-  --header "Host: 127.0.0.1" \
-  --request PUT "$LANCEDB_TEST_S3_ENDPOINT/lancedb-ci"
+for bucket in lancedb-ci lancedb-ci-clone; do
+  curl --fail-with-body --silent --show-error --max-time 10 \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    --user "$LANCEDB_TEST_S3_ACCESS_KEY:$LANCEDB_TEST_S3_SECRET_KEY" \
+    --header "Host: 127.0.0.1" \
+    --request PUT "$LANCEDB_TEST_S3_ENDPOINT/$bucket"
+done
 
 # An explicit command can reuse the verified, disposable server for benchmarks.
 if [[ "$#" -gt 0 ]]; then

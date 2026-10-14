@@ -105,6 +105,27 @@ defmodule LanceDB.BranchTest do
              LanceDB.Connection.clone_table(conn, "bad", source, source_version: 999_999)
   end
 
+  @tag :source_build
+  test "shallow clones across distinct object store buckets write only to the destination" do
+    suffix = "#{System.system_time(:nanosecond)}_#{System.unique_integer([:positive])}"
+    {:ok, source_conn} = LanceDB.connect("shared-memory://source-#{suffix}/db")
+    {:ok, target_conn} = LanceDB.connect("shared-memory://target-#{suffix}/db")
+
+    {:ok, source_table} =
+      LanceDB.Connection.create_table(source_conn, "docs", [%{id: 1, text: "elixir"}])
+
+    {:ok, :created} = LanceDB.Index.create(source_table, :text, type: :fts)
+    {:ok, source_uri} = LanceDB.Table.uri(source_table)
+
+    assert {:ok, copy} = LanceDB.Connection.clone_table(target_conn, "copy", source_uri)
+    assert {:ok, ["docs"]} = LanceDB.Connection.table_names(source_conn)
+    assert {:ok, ["copy"]} = LanceDB.Connection.table_names(target_conn)
+    assert {:ok, [%{"id" => 1}]} = LanceDB.Query.full_text_search(copy, "elixir")
+    assert {:ok, %{inserted: 1}} = LanceDB.Table.add(copy, [%{id: 2, text: "cloned"}])
+    assert {:ok, 2} = LanceDB.Table.count_rows(copy)
+    assert {:ok, 1} = LanceDB.Table.count_rows(source_table)
+  end
+
   test "invalid branch and clone arguments fail before native calls" do
     for name <- [nil, :branch, "", "  ", <<255>>] do
       assert_raise ArgumentError, fn -> LanceDB.Branch.create(:unused, name) end

@@ -831,6 +831,45 @@ defmodule LanceDB.S3Test do
       )
 
     on_exit(fn -> File.rm_rf!(local) end)
+    {:ok, local_conn} = LanceDB.connect(local, options)
+
+    assert {:ok, local_copy} =
+             LanceDB.Connection.clone_table(local_conn, "local_copy", source,
+               source_tag: "branch_snapshot"
+             )
+
+    assert {:ok, 1} = LanceDB.Table.count_rows(local_copy)
+    assert {:ok, ["local_copy"]} = LanceDB.Connection.table_names(local_conn)
+
+    if secondary_base = System.get_env("LANCEDB_TEST_S3_SECONDARY_URI") do
+      secondary_uri =
+        String.trim_trailing(secondary_base, "/") <>
+          "/case_#{System.system_time(:nanosecond)}_#{System.unique_integer([:positive])}"
+
+      assert {:ok, secondary} = LanceDB.connect(secondary_uri, options)
+
+      on_exit(fn ->
+        assert {:ok, names} = LanceDB.Connection.table_names(secondary)
+
+        for name <- names do
+          assert {:ok, :dropped} = LanceDB.Connection.drop_table(secondary, name)
+        end
+      end)
+
+      assert {:ok, bucket_copy} =
+               LanceDB.Connection.clone_table(secondary, "bucket_copy", source,
+                 source_tag: "branch_snapshot"
+               )
+
+      assert {:ok, ["bucket_copy"]} = LanceDB.Connection.table_names(secondary)
+      assert {:ok, ["copy", "source"]} = LanceDB.Connection.table_names(conn)
+      assert {:ok, %{"owner" => "branch"}} = LanceDB.Metadata.schema(bucket_copy)
+      assert {:ok, 1} = LanceDB.Table.count_rows(bucket_copy)
+      assert {:ok, %{inserted: 1}} = LanceDB.Table.add(bucket_copy, [%{id: 3}])
+      assert {:ok, 2} = LanceDB.Table.count_rows(bucket_copy)
+      assert {:ok, 1} = LanceDB.Table.count_rows(copy)
+    end
+
     {:ok, other} = LanceDB.connect(local, Map.put(options, "aws_access_key_id", "override-me"))
 
     assert {:ok, reopened} =
