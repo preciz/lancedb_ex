@@ -95,6 +95,7 @@ impl<T: Clone + Send + Sync + 'static> Writer<T> {
     pub(crate) async fn push(&self, batch: RecordBatch) -> Result<(), Failure> {
         self.check_open()?;
         self.validation.validate(&batch)?;
+        let batch = crate::compat::json::mask_unreachable(&batch)?;
         if self.input.send(Input::Batch(batch)).await.is_err() {
             return Err(self
                 .outcome()

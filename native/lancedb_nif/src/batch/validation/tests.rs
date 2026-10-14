@@ -291,20 +291,77 @@ fn blob_inputs_enforce_the_same_exclusive_payload_rule_as_rows() {
 fn json_payload_checks_respect_slices_and_null_parent_fields() {
     use arrow_array::LargeBinaryArray;
     let good = lance_arrow::json::encode_json("{\"a\":[1,null]}").unwrap();
-    let field = Arc::new(lance_arrow::json::json_field("value", true));
+    // Truncated string length and invalid UTF-8 would panic RawJsonb::to_string if decoded.
+    let bad_truncated = [0x20, 0, 0, 0, 0x10, 0, 0, 99, b'a'];
+    let bad_utf8 = [0x20, 0, 0, 0, 0x10, 0, 0, 1, 0xff];
+    let field = Arc::new(lance_arrow::json::json_field("value", false));
     let values: ArrayRef = Arc::new(LargeBinaryArray::from(vec![
-        Some(b"invalid".as_slice()),
+        Some(bad_truncated.as_slice()),
         Some(good.as_slice()),
-        Some(b"invalid".as_slice()),
+        Some(bad_utf8.as_slice()),
     ]));
     let schema = Arc::new(Schema::new(vec![field.clone()]));
     let input = RecordBatch::try_new(schema, vec![values.clone()]).unwrap();
     assert!(validate(&input).is_err());
+    assert!(crate::codec::batches_to_json(vec![input.clone()]).is_err());
     assert!(validate(&input.slice(1, 1)).is_ok());
-    let parent: ArrayRef = Arc::new(StructArray::new(
-        vec![field].into(),
-        vec![values],
-        Some(NullBuffer::from(vec![false, true, false])),
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(
+            &crate::codec::batches_to_json(vec![input.slice(1, 1)]).unwrap()
+        )
+        .unwrap(),
+        serde_json::json!({
+            "rows": [{"value": "{\"a\":[1,null]}"}],
+            "binary_fields": {"value": "json"}
+        })
+    );
+
+    let nulls = Some(NullBuffer::from(vec![false, true, false]));
+    let keys: ArrayRef = Arc::new(arrow_array::StringArray::from(vec!["k0", "k1", "k2"]));
+    let map_entries_fields: arrow_schema::Fields = vec![
+        Arc::new(Field::new("key", DataType::Utf8, false)),
+        field.clone(),
+    ]
+    .into();
+    let map_entries_field = Arc::new(Field::new(
+        "entries",
+        DataType::Struct(map_entries_fields.clone()),
+        false,
     ));
-    assert!(validate(&batch(parent)).is_ok());
+    let map_entries = StructArray::new(map_entries_fields, vec![keys, values.clone()], None);
+
+    for parent in [
+        Arc::new(StructArray::new(
+            vec![field.clone()].into(),
+            vec![values.clone()],
+            nulls.clone(),
+        )) as ArrayRef,
+        Arc::new(ListArray::new(
+            field.clone(),
+            OffsetBuffer::new(vec![0_i32, 1, 2, 3].into()),
+            values.clone(),
+            nulls.clone(),
+        )),
+        Arc::new(LargeListArray::new(
+            field.clone(),
+            OffsetBuffer::new(vec![0_i64, 1, 2, 3].into()),
+            values.clone(),
+            nulls.clone(),
+        )),
+        Arc::new(FixedSizeListArray::new(field, 1, values, nulls.clone())),
+        Arc::new(MapArray::new(
+            map_entries_field,
+            OffsetBuffer::new(vec![0_i32, 1, 2, 3].into()),
+            map_entries,
+            nulls,
+            false,
+        )),
+    ] {
+        let parent_batch = batch(parent);
+        assert!(validate(&parent_batch).is_ok());
+        assert!(crate::codec::batches_to_json(vec![parent_batch.clone()]).is_ok());
+        let sliced = parent_batch.slice(1, 1);
+        assert!(validate(&sliced).is_ok());
+        assert!(crate::codec::batches_to_json(vec![sliced]).is_ok());
+    }
 }

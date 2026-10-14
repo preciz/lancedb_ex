@@ -105,6 +105,65 @@ defmodule LanceDB.ArrowValidationTest do
     assert {:ok, 2} = History.version(table)
   end
 
+  test "malformed JSONB beneath a null parent is masked during row decoding and table writes", %{
+    conn: conn
+  } do
+    schema = Schema.new(id: :int64, value: {:struct, [data: :json]})
+    sentinel = %{"architecture_jsonb_sentinel" => "value"}
+
+    {:ok, batch} =
+      Batch.from_rows(
+        [
+          %{id: 1, value: %{data: sentinel}},
+          %{id: 2, value: nil},
+          %{id: 3, value: %{data: %{"ok" => true}}}
+        ],
+        schema
+      )
+
+    {:ok, ipc} = Batch.to_ipc(batch)
+    [{json_offset, 27}] = :binary.matches(ipc, "architecture_jsonb_sentinel")
+    <<prefix::binary-size(^json_offset), _::binary-size(27), suffix::binary>> = ipc
+    corrupted_ipc = prefix <> :binary.copy(<<255>>, 27) <> suffix
+
+    # When the parent struct on row 0 is non-null, decoding and writes reject the malformed JSONB.
+    {:ok, [unmasked_batch]} = Batch.from_ipc(corrupted_ipc)
+    assert {:error, %Error{kind: :invalid_data}} = Batch.to_rows(unmasked_batch)
+
+    assert {:error, %Error{kind: :invalid_data}} =
+             Connection.create_table(
+               conn,
+               "unmasked_null_parent",
+               Source.batches([unmasked_batch], schema: schema)
+             )
+
+    # Mask row 0 on the parent StructArray validity bitmap (0b101 -> 0b110, keeping null_count = 1)
+    # while leaving the child LargeBinaryArray slot 0 non-null (0b101) with the corrupted JSONB bytes.
+    [{mask_offset, 8}, _child_mask] = :binary.matches(corrupted_ipc, <<5, 0, 0, 0, 0, 0, 0, 0>>)
+    <<mask_prefix::binary-size(^mask_offset), 5, mask_suffix::binary>> = corrupted_ipc
+    masked_ipc = mask_prefix <> <<6>> <> mask_suffix
+
+    assert {:ok, [masked_batch]} = Batch.from_ipc(masked_ipc)
+
+    expected = [
+      %{"id" => 1, "value" => nil},
+      %{"id" => 2, "value" => %{"data" => nil}},
+      %{"id" => 3, "value" => %{"data" => %{"ok" => true}}}
+    ]
+
+    assert {:ok, ^expected} = Batch.to_rows(masked_batch)
+
+    assert {:ok, table} =
+             Connection.create_table(
+               conn,
+               "masked_null_parent",
+               Source.batches([masked_batch], schema: schema)
+             )
+
+    assert {:ok, ^expected} =
+             table |> Query.new(limit: nil, order_by: [asc: :id]) |> Query.all()
+  end
+
   # Alter one valid IPC value buffer to represent input from another Arrow producer.
   # Metadata, offsets, null masks, and the physical schema remain structurally valid.
   defp imported(rows, schema, pattern, replacement) do

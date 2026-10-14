@@ -140,8 +140,8 @@ fn ingest_push_batch(
 ) -> Result<Atom, Failure> {
     writer.check_owner(env)?;
     writer.worker.check_open()?;
-    let batch =
-        lance_arrow::json::convert_json_columns(&batch.batch).map_err(Failure::from_error)?;
+    let batch = crate::compat::json::mask_unreachable(&batch.batch)?;
+    let batch = lance_arrow::json::convert_json_columns(&batch).map_err(Failure::from_error)?;
     crate::request::settle(env, reference, async move {
         writer.worker.push(batch).await?;
         Ok(atoms::ok())

@@ -108,6 +108,7 @@ pub(crate) fn batches_to_json(batches: Vec<RecordBatch>) -> Result<String, Failu
             .build::<_, arrow_json::writer::JsonArray>(&mut buf);
         for batch in batches {
             crate::batch::validation::validate_json(&batch)?;
+            let batch = crate::compat::json::mask_unreachable(&batch)?;
             let batch = lance_arrow::json::convert_lance_json_to_arrow(&batch)
                 .map_err(Failure::from_error)?;
             let output_schema = crate::row_adapter::schema(&batch.schema(), true);
