@@ -46,6 +46,9 @@ fi
 unset LANCEDB_BUILD LANCEDB_NIF_BASE_URL RUSTLER_PRECOMPILED_FORCE_BUILD_ALL
 unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GH_HOST
 unset TARGET_ARCH TARGET_OS TARGET_ABI TARGET_VENDOR
+# This disposable project must use its own default build/dependency directories
+# and the host target, regardless of the maintainer's current Mix configuration.
+unset MIX_ENV MIX_TARGET MIX_BUILD_PATH MIX_BUILD_ROOT MIX_DEPS_PATH MIX_LOCKFILE MIX_EXS
 export RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$validation_root/empty-nif-cache"
 cd "$validation_root/consumer"
 mix deps.get

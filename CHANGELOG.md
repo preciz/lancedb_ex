@@ -7,6 +7,9 @@
   map keys, blob inputs and JSONB payloads. Compile checks once per
   writer and inspect only reachable values without row conversion. Guard JSONB
   row decoding through the same traversal. Requires a new native build.
+- Isolate fresh consumer verification from inherited Mix environment, target,
+  project, build and dependency paths so custom maintainer settings cannot
+  redirect the temporary project's compilation or release.
 
 - Expose `TableCache.connection/2` for shared connection access, including empty
   databases. Share supervised setup with fetch/warming requests and bound waiting
