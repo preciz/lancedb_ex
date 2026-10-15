@@ -87,6 +87,11 @@ are encoded in an owned environment after I/O; message transfer shares their
 binary storage. The SDK's synchronous merge reader bridges to its input stream
 only on background blocking threads.
 
+Write dispatch supplies validation/not-started metadata for unmarked preparation
+failures. Mutation calls and fallible processing after mutation explicitly mark
+execution/unknown outcomes, which dispatch preserves. All table mutations check
+snapshot mutability before planning or invoking a mutation.
+
 Read cancellation and write completion have different guarantees. Explicit
 cursor close waits for cleanup and read slot release. A writer abort sends
 an input error and waits for SDK execution. Dropping a write future can

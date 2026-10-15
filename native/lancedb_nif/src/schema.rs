@@ -53,6 +53,7 @@ async fn add_columns_impl(
     table_res: ResourceArc<TableResource>,
     expressions: Vec<(String, String)>,
 ) -> Result<u64, Failure> {
+    table_res.ensure_mutable()?;
     let schema = table_res
         .table
         .schema()
@@ -81,7 +82,7 @@ async fn add_columns_impl(
         .await
         .map_err(|e| {
             let message = format!("Invalid column expressions: {e}");
-            Failure::write_error(e).context(message)
+            Failure::from_error(e).context(message)
         })?;
     let planned_schema = planned.schema();
     let fields = expressions
@@ -190,6 +191,7 @@ async fn alter_columns_impl(
     table_res: ResourceArc<TableResource>,
     changes_json: String,
 ) -> Result<u64, Failure> {
+    table_res.ensure_mutable()?;
     let changes: Vec<Alteration> =
         serde_json::from_str(&changes_json).map_err(Failure::from_error)?;
 
@@ -253,6 +255,7 @@ async fn drop_columns_impl(
     table_res: ResourceArc<TableResource>,
     columns: Vec<String>,
 ) -> Result<u64, Failure> {
+    table_res.ensure_mutable()?;
     let arrow = table_res
         .table
         .schema()

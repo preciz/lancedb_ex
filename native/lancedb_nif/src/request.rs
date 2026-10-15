@@ -31,7 +31,12 @@ where
     // Admit before spawning. A streaming writer or index job can transfer this
     // permit to its completion watcher rather than releasing it at preparation.
     let permit = Permit::write().map_err(Failure::before_write)?;
-    settle(env, reference, operation(permit))
+    let operation = operation(permit);
+    settle(env, reference, async move {
+        // Mutation calls mark execution errors explicitly. Unmarked failures
+        // occur during preparation; never replace an existing write boundary.
+        operation.await.map_err(Failure::before_write)
+    })
 }
 
 pub(crate) fn settle<T: Encoder + Send + 'static>(

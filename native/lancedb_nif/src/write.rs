@@ -130,6 +130,7 @@ async fn delete_rows_result_impl(
     table: ResourceArc<TableResource>,
     predicate: String,
 ) -> Result<DeleteResult, Failure> {
+    table.ensure_mutable()?;
     let result = table
         .table
         .delete(&predicate)

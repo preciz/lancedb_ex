@@ -78,12 +78,13 @@ fn drop_table(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
+        lancedb::utils::validate_table_name(&name).map_err(Failure::from_error)?;
 
         match conn_res.conn.drop_table(&name, &[]).await {
             Ok(()) => Ok(atoms::dropped()),
             Err(e) => {
                 let message = format!("Failed to drop table: {e}");
-                Err(Failure::from_error(e).context(message))
+                Err(Failure::write_error(e).context(message))
             }
         }
     })

@@ -87,8 +87,11 @@ async fn execute(
         .with_session(dataset.session())
         .execute(transaction)
         .await
-        .map_err(Failure::from_error)?;
-    OpenOptions::default().open(conn, name).await
+        .map_err(Failure::write_error)?;
+    OpenOptions::default()
+        .open(conn, name)
+        .await
+        .map_err(Failure::write_error)
 }
 
 // Match ListingDatabase::table_uri, including its normalized engine scheme

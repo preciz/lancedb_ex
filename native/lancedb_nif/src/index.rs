@@ -151,8 +151,10 @@ fn create_index(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
-
-        crate::compat::fts::index(index_builder(&table.table, column, options)?.execute()).await?;
+        table.ensure_mutable()?;
+        crate::compat::fts::index(index_builder(&table.table, column, options)?.execute())
+            .await
+            .map_err(Failure::write_error)?;
         Ok(atoms::created())
     })
 }
@@ -166,10 +168,12 @@ fn create_index_async(
     reference: Term<'_>,
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
+        table.ensure_mutable()?;
         let job = crate::compat::fts::index(
             index_builder(&table.table, column, options)?.execute_async(),
         )
-        .await?;
+        .await
+        .map_err(Failure::write_error)?;
         Ok(crate::job::JobResource::new(job, permit))
     })
 }
@@ -248,12 +252,12 @@ fn drop_index(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
-
+        table_res.ensure_mutable()?;
         table_res
             .table
             .drop_index(&name)
             .await
-            .map_err(Failure::from_error)?;
+            .map_err(Failure::write_error)?;
         Ok(atoms::dropped())
     })
 }

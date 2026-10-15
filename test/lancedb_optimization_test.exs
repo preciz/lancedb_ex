@@ -118,8 +118,6 @@ defmodule LanceDB.OptimizationTest do
     assert {:error, %Error{operation: :optimize, details: details}} =
              Maintenance.optimize(snapshot)
 
-    assert details.phase == :execution
-    assert details.commit_outcome == :unknown
     refute Map.has_key?(details, :compaction)
     refute Map.has_key?(details, :cleanup)
     assert {:ok, 1} = Table.count_rows(table)

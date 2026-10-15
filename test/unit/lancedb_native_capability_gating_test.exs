@@ -42,6 +42,14 @@ defmodule LanceDB.NativeCapabilityGatingTest do
     assert output =~ "Unexpected optimization failure"
   end
 
+  test "native operation contract checks run in source builds and skip older artifacts" do
+    for {source_build, expected} <- [{nil, "skipped"}, {"true", "enabled"}] do
+      {output, status} = helper(:available, source_build)
+      assert status == 0, output
+      assert output =~ "native operation contracts #{expected}"
+    end
+  end
+
   defp helper(support, source_build, optimization \\ :available) do
     code = """
     Code.compiler_options(ignore_module_conflict: true)
@@ -74,6 +82,11 @@ defmodule LanceDB.NativeCapabilityGatingTest do
       IO.puts("optimization skipped")
     else
       IO.puts("optimization enabled")
+    end
+    if :native_operation_contract in excluded do
+      IO.puts("native operation contracts skipped")
+    else
+      IO.puts("native operation contracts enabled")
     end
     """
 

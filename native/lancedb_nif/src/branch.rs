@@ -39,7 +39,7 @@ fn create_branch(
             .table
             .create_branch(&name, source)
             .await
-            .map_err(Failure::from_error)?;
+            .map_err(Failure::write_error)?;
         Ok(ResourceArc::new(TableResource {
             table: Arc::new(branch),
         }))
@@ -109,7 +109,7 @@ fn delete_branch(
             .table
             .delete_branch(&name)
             .await
-            .map_err(Failure::from_error)?;
+            .map_err(Failure::write_error)?;
         Ok(atoms::deleted())
     })
 }

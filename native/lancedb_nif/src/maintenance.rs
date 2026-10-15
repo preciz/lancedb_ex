@@ -10,6 +10,7 @@ fn optimize(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
+        table.ensure_mutable()?;
         let stats = table
             .table
             .optimize(lancedb::table::OptimizeAction::All)
@@ -69,6 +70,7 @@ fn optimize_indices(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
+        table_res.ensure_mutable()?;
         let options: crate::maintenance_options::IndexOptions =
             serde_json::from_str(&options).map_err(Failure::from_error)?;
 
@@ -78,7 +80,7 @@ fn optimize_indices(
             .await
             .map_err(|e| {
                 let message = format!("Failed to optimize indexes: {e}");
-                Failure::from_error(e).context(message)
+                Failure::write_error(e).context(message)
             })?;
         Ok(atoms::optimized())
     })
@@ -93,6 +95,7 @@ fn compact_files(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
+        table_res.ensure_mutable()?;
         let options = crate::maintenance_options::compaction(&options)?;
 
         let stats = table_res
@@ -104,9 +107,11 @@ fn compact_files(
             .await
             .map_err(|e| {
                 let message = format!("Failed to compact files: {e}");
-                Failure::from_error(e).context(message)
+                Failure::write_error(e).context(message)
             })?;
-        let stats = stats.compaction.ok_or("Missing compaction statistics")?;
+        let stats = stats.compaction.ok_or_else(|| {
+            Failure::new("execution", "Missing compaction statistics").executing()
+        })?;
         Ok(compaction_stats(stats).to_string())
     })
 }
@@ -120,6 +125,7 @@ fn cleanup_old_versions(
 ) -> Result<Atom, Failure> {
     crate::request::write(env, reference, move |permit| async move {
         let _permit = permit;
+        table_res.ensure_mutable()?;
         let options: crate::maintenance_options::PruneOptions =
             serde_json::from_str(&options).map_err(Failure::from_error)?;
         let older_than_seconds = options.older_than_seconds;
@@ -141,9 +147,11 @@ fn cleanup_old_versions(
             .await
             .map_err(|e| {
                 let message = format!("Failed to clean up old versions: {e}");
-                Failure::from_error(e).context(message)
+                Failure::write_error(e).context(message)
             })?;
-        let stats = stats.prune.ok_or("Missing cleanup statistics")?;
+        let stats = stats
+            .prune
+            .ok_or_else(|| Failure::new("execution", "Missing cleanup statistics").executing())?;
         Ok(cleanup_stats(stats).to_string())
     })
 }

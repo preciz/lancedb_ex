@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH"
           cp artifacts/*.tar.gz "$RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH/"
           mv native "$RUNNER_TEMP/lancedb-native"
-          mix test --include native_value_validation --cover --warnings-as-errors
+          mix test --include native_value_validation --include native_operation_contract --cover --warnings-as-errors
           mix run scripts/consumer_smoke.exs
       - uses: actions/upload-artifact@v4
         with:

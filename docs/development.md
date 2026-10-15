@@ -57,6 +57,12 @@ the native packaging workflow explicitly includes them against every candidate
 binary without compiling Rust in the consumer project. To verify a matching
 precompiled build locally, run `mix test --include native_value_validation`.
 
+Tests tagged `:native_operation_contract` cover snapshot mutation rejection
+and write-boundary metadata. The selected
+published NIF predates these fixes. Source builds run these checks, and the
+packaging workflow explicitly includes them against every candidate binary.
+For a matching precompiled build, run `mix test --include native_operation_contract`.
+
 Rust changes require source-build validation and a new immutable native build
 before release. Passing tests with previously selected archives does not
 validate unpublished native changes.

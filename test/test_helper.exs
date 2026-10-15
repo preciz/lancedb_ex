@@ -38,7 +38,12 @@ if source_build? and !optimization_available?,
   do: raise("Source build is missing standard optimization; recompile the native library")
 
 exclude = [:s3]
-exclude = if source_build?, do: exclude, else: [:source_build, :native_value_validation | exclude]
+
+exclude =
+  if source_build?,
+    do: exclude,
+    else: [:source_build, :native_value_validation, :native_operation_contract | exclude]
+
 exclude = if preparation_available?, do: exclude, else: [:fts_preparation | exclude]
 exclude = if optimization_available?, do: exclude, else: [:standard_optimization | exclude]
 

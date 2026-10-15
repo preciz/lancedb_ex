@@ -53,17 +53,17 @@ fn tag_action(
             "create" => {
                 tags.create(&name, version.ok_or("Missing version")?)
                     .await
-                    .map_err(Failure::from_error)?;
+                    .map_err(Failure::write_error)?;
                 Ok(atoms::created())
             }
             "update" => {
                 tags.update(&name, version.ok_or("Missing version")?)
                     .await
-                    .map_err(Failure::from_error)?;
+                    .map_err(Failure::write_error)?;
                 Ok(atoms::updated())
             }
             "delete" => {
-                tags.delete(&name).await.map_err(Failure::from_error)?;
+                tags.delete(&name).await.map_err(Failure::write_error)?;
                 Ok(atoms::deleted())
             }
             _ => Err("Invalid tag action".into()),
