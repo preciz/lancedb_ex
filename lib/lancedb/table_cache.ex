@@ -24,7 +24,8 @@ defmodule LanceDB.TableCache do
     * `:max_opens` (default 4), `:max_warmers` (default 2) bound concurrent work.
       One warmer processes a table's requested indexes sequentially.
     * `:max_requests` (default 256) bounds waiting connection/fetch callers plus queued/running
-      index warming requests. Saturation returns `:busy`. Finished records do not
+      index warming requests. Saturation returns
+      `{:error, %LanceDB.Error{kind: :busy}}`. Finished records do not
       consume request capacity. Total retained warming records are also bounded
       by this limit; completed/failed records are discarded as needed to admit
       new warming requests. Discarded records can cause subsequent warming to repeat.
@@ -38,6 +39,9 @@ defmodule LanceDB.TableCache do
   when to warm. Direct connection/table APIs remain available. Each node owns
   its own cache. Cached handles are live main-branch tables; use the direct API
   for custom locations, branches and historical checkouts.
+
+  `connection/2`, `fetch/3`, `prewarm/3`, and `status/2` return `{:ok, value}`
+  or `{:error, %LanceDB.Error{}}`. `invalidate/2` returns the bare atom `:ok`.
   """
   use GenServer
   alias LanceDB.{Error, Execution, Options}
@@ -54,7 +58,8 @@ defmodule LanceDB.TableCache do
   end
 
   @doc """
-  Returns the cache's shared connection, connecting lazily if necessary.
+  Returns `{:ok, connection}` for the cache's shared connection, connecting lazily
+  if necessary. Request saturation returns `{:error, %LanceDB.Error{kind: :busy}}`.
 
   Accepts only `:timeout_ms` (default 15_000); nil waits indefinitely. This caller
   deadline is separate from the configured native `:connect_timeout_ms`.
@@ -85,11 +90,13 @@ defmodule LanceDB.TableCache do
   end
 
   @doc """
-  Returns the retained handle, sharing concurrent opens for the same name.
+  Returns `{:ok, table}` for the retained handle, sharing concurrent opens for
+  the same name.
   `:timeout_ms` defaults to 15_000; nil waits indefinitely. It covers queueing,
   connection and open waits for this caller. Timeout/caller death removes the
   waiter but does not cancel an open shared with the cache or other callers.
-  Failed opens are retryable. Native admission saturation returns `:busy`.
+  Failed opens are retryable. Native admission saturation returns
+  `{:error, %LanceDB.Error{kind: :busy}}`.
   """
   @spec fetch(GenServer.server(), String.t(), keyword()) :: LanceDB.result(LanceDB.Table.t())
   def fetch(server, name, opts \\ []) do
@@ -120,9 +127,11 @@ defmodule LanceDB.TableCache do
   version and index UUID. Warming uses a snapshot sharing the fetched session;
   a table change detected during warming fails the attempt for retry.
 
-  Failures/crashes, including native `:busy`, are visible through `status/2`
-  and can be retried with another request. Invalidation/eviction discard late
-  results. Running native prewarming cannot be forcibly interrupted.
+  Scheduling saturation returns `{:error, %LanceDB.Error{kind: :busy}}`.
+  Background failures/crashes, including native admission saturation, are recorded
+  as `LanceDB.Error` values in each warming record's `error` field, returned by
+  `status/2`. They can be retried with another request. Invalidation/eviction
+  discard late results. Running native prewarming cannot be forcibly interrupted.
   """
   @spec prewarm(GenServer.server(), String.t(), keyword()) :: LanceDB.result(:scheduled)
   def prewarm(server, name, opts) do
@@ -132,7 +141,12 @@ defmodule LanceDB.TableCache do
     Execution.run(:cache_prewarm, fn -> GenServer.call(server, {:prewarm, name, indexes}) end)
   end
 
-  @doc "Returns string-keyed index names mapped to Warming structs; unretained tables return :not_found."
+  @doc """
+  Returns `{:ok, statuses}` with string-keyed index names mapped to Warming structs.
+  An unwarmed retained table returns `{:ok, %{}}`; an unretained table returns
+  `{:error, %LanceDB.Error{kind: :not_found}}`. Background failures are stored in
+  the warming records' `error` fields while this call still returns `{:ok, statuses}`.
+  """
   @spec status(GenServer.server(), String.t()) :: LanceDB.result(%{String.t() => Warming.t()})
   def status(server, name) do
     name = Options.string!(name, "table name")
@@ -140,8 +154,9 @@ defmodule LanceDB.TableCache do
   end
 
   @doc """
-  Discards an entry and its warming records, returning :ok even if absent.
-  Pending fetches receive :cancelled. Later results cannot recreate the entry.
+  Discards an entry and its warming records, returning `:ok` even if absent.
+  Pending fetches receive `{:error, %LanceDB.Error{kind: :cancelled}}`.
+  Later results cannot recreate the entry.
   Existing caller-held handles remain usable; explicitly invalidate after
   dropping/recreating a table. Running work stays counted until it settles.
   """

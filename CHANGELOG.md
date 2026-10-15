@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify table cache success and structured error return values, including
+  background warming failures, saturation, missing entries, and invalidation.
 - Document pipeable query builders, explicit expression literals, reusable index
   definitions, blob column discovery, and batch construction and inspection.
 - Return structured `LanceDB.Error` values from `Batch.schema/1` on JSON decoding

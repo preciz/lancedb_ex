@@ -7,6 +7,10 @@ tables can retain handles and warm several indexes in the background. The
 application owns credentials, schemas, index creation, table names, and when
 to request warming. This component handles sharing, capacity and lifecycle.
 
+`connection/2`, `fetch/3`, `prewarm/3`, and `status/2` return `{:ok, value}`
+or `{:error, %LanceDB.Error{kind: kind}}`. Match the error's `kind` field.
+`invalidate/2` returns the bare atom `:ok`.
+
 ## Supervision and configuration
 
 Add a child to your application's supervision tree:
@@ -118,7 +122,8 @@ parallel up to `max_warmers`. New indexes requested during an active batch wait 
 that batch to finish. Fetching retained handles and querying them can proceed while
 warming is active, subject to ordinary native admission and storage limits.
 
-`status/2` returns a string-keyed map of `LanceDB.TableCache.Warming` structs:
+`status/2` returns `{:ok, statuses}`, where `statuses` is a string-keyed map
+of `LanceDB.TableCache.Warming` structs:
 
 ```elixir
 %{
@@ -133,10 +138,16 @@ warming is active, subject to ordinary native admission and storage limits.
 ```
 
 States are `:queued`, `:running`, `:completed`, and `:failed`. An unwarmed retained
-table returns an empty map; an absent/evicted table returns `:not_found`. Failures
-contain a structured `LanceDB.Error`, including missing indexes, worker crashes,
-native admission `:busy` and observed concurrent table changes (`:conflict`). Another
-prewarm request retries failed indexes. There are no automatic retries.
+table returns `{:ok, %{}}`; an absent or evicted table returns
+`{:error, %LanceDB.Error{kind: :not_found}}`.
+
+After a successful scheduling response, background failures appear in each
+warming record's `error` field as a `LanceDB.Error`. These include missing
+indexes, worker crashes, native admission saturation (`kind: :busy`), and
+observed concurrent table changes (`kind: :conflict`). The `status/2` call
+still returns `{:ok, statuses}` for a retained table with failed warming
+records. Another prewarm request retries failed indexes. There are no automatic
+retries.
 
 Completed attempts are revalidated against table version and index UUID before
 skipping native prewarming. Table version catches added index segments that keep
@@ -159,9 +170,9 @@ branches, per-open storage overrides and historical checkouts.
 
 Invalidate after dropping/recreating a table, or to discard retained warming
 records and force a fresh attempt. It succeeds even if the entry is absent.
-Pending fetches receive `:cancelled`. Late open/warming results cannot recreate
-an entry or mark a replacement complete. Invalidation does not revoke handles
-already returned to callers.
+Pending fetches receive `{:error, %LanceDB.Error{kind: :cancelled}}`.
+Late open/warming results cannot recreate an entry or mark a replacement
+complete. Invalidation does not revoke handles already returned to callers.
 
 At `max_tables`, admission evicts the entry least recently fetched/prewarmed.
 Pending fetch callers protect an entry until they finish, die or time out.
@@ -173,7 +184,10 @@ keep an entry alive. Warming alone does not protect an entry from eviction.
 Completed and failed attempts release request capacity. Request admission is
 checked against the prospective entries after any capacity eviction; rejected
 requests leave existing entries and their status intact. Saturation returns
-`:busy`. Already-retained connections and tables remain available without adding a waiter.
+`{:error, %LanceDB.Error{kind: :busy}}` from `connection/2`, `fetch/3`, or
+`prewarm/3`. Already-retained connections and tables remain available without
+adding a waiter. Native admission saturation during connection or table opening
+also reaches waiting callers as a structured error with `kind: :busy`.
 
 Total retained warming records are independently bounded by the same limit.
 New warming requests can discard completed/failed records, starting with the
