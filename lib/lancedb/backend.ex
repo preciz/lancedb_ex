@@ -162,7 +162,7 @@ defmodule LanceDB.Backend do
   def stream_open(table, request, batch_size),
     do: call(:stream_open, [table, JSON.encode!(request.request), batch_size])
 
-  @spec stream_close(reference()) :: result(:ok)
+  @spec stream_close(reference()) :: :ok
   def stream_close(cursor), do: call(:stream_close, [cursor])
   @spec add_columns(Table.t(), [{String.t(), String.t()}]) :: result(Native.version_output())
   def add_columns(table, expressions), do: call(:add_columns, [table, expressions])

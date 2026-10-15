@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Correct cursor close and native batch-pull typespecs to match their synchronous
+  return values and asynchronous acknowledgements.
 - Reject snapshot mutations before planning or execution, and consistently report
   native write validation versus execution boundaries, including index, tag,
   branch, maintenance, clone and table deletion failures.

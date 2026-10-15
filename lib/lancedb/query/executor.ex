@@ -62,7 +62,7 @@ defmodule LanceDB.Query.Executor do
         context
       )
 
-  @spec close(reference(), map()) :: LanceDB.result(:ok)
+  @spec close(reference(), map()) :: :ok
   def close(cursor, context \\ %{}),
     do: LanceDB.Execution.run(:stream_close, fn -> Backend.stream_close(cursor) end, context)
 

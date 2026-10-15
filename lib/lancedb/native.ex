@@ -426,10 +426,10 @@ defmodule LanceDB.Native do
   @spec stream_open(reference(), String.t(), pos_integer()) :: result(reference())
   def stream_open(_table, _request, _batch_size), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec stream_close(reference()) :: result(:ok)
+  @spec stream_close(reference()) :: :ok
   def stream_close(cursor), do: async_call(:stream_close, [cursor])
 
-  @spec stream_close(reference(), reference()) :: result(:ok)
+  @spec stream_close(reference(), reference()) :: :ok | {:ok, :ok}
   def stream_close(_cursor, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
   @spec add_columns(reference(), [{String.t(), String.t()}]) :: result(version_output())
@@ -644,7 +644,7 @@ defmodule LanceDB.Native do
   @spec stream_next_batch(reference()) :: result(reference() | nil)
   def stream_next_batch(cursor), do: async_call(:stream_next_batch, [cursor])
 
-  @spec stream_next_batch(reference(), reference()) :: result(:ok)
+  @spec stream_next_batch(reference(), reference()) :: result(:ok | reference() | nil)
   def stream_next_batch(_cursor, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
   defp async_call(operation, args) do
