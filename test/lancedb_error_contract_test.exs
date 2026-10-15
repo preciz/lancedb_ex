@@ -1,6 +1,17 @@
 defmodule LanceDB.ErrorContractTest do
   use LanceDB.DataCase, async: false
-  alias LanceDB.{ArrowSchema, Connection, Error, Field, History, Query, Schema, SchemaEvolution}
+
+  alias LanceDB.{
+    ArrowSchema,
+    Batch,
+    Connection,
+    Error,
+    Field,
+    History,
+    Query,
+    Schema,
+    SchemaEvolution
+  }
 
   setup %{path: path} do
     {:ok, conn} = Connection.connect(path)
@@ -93,6 +104,73 @@ defmodule LanceDB.ErrorContractTest do
     arrow = %ArrowSchema{fields: schema.fields, metadata: schema.metadata}
     assert {:ok, ^schema} = ArrowSchema.to_schema(arrow)
     assert_stop(:schema_conversion, :ok)
+  end
+
+  test "batch schema returns its physical description and completes one span" do
+    schema = Schema.new([id: :int64], %{owner: "test"})
+    {:ok, batch} = Batch.from_rows([%{id: 1}], schema)
+    assert_stop(:batch_from_rows, :ok)
+
+    arrow = %ArrowSchema{fields: schema.fields, metadata: schema.metadata}
+    assert {:ok, ^arrow} = Batch.schema(batch)
+    assert_stop(:batch_schema, :ok)
+  end
+
+  test "batch schema decoding failures return structured errors and complete their spans" do
+    # Rust normally emits valid JSON. Replace only that boundary in a child VM
+    # to exercise the public error contract without replacing the real decoder.
+    code = """
+    Code.compiler_options(ignore_module_conflict: true)
+    defmodule LanceDB.Native do
+      def batch_schema(_), do: Process.get(:schema_json)
+    end
+
+    defmodule BatchSchemaEvents do
+      def event(event, _measurements, metadata, _config),
+        do: Process.put(:events, [{event, metadata} | Process.get(:events, [])])
+    end
+
+    {:ok, _} = Application.ensure_all_started(:telemetry)
+    events = for suffix <- [:start, :stop, :exception], do: [:lancedb, :operation, suffix]
+    :ok = :telemetry.attach_many(make_ref(), events, &BatchSchemaEvents.event/4, nil)
+    batch = %LanceDB.Batch{resource: make_ref()}
+
+    for json <- ["", "{invalid", <<255>>] do
+      Process.put(:schema_json, json)
+      Process.put(:events, [])
+      {:error, reason} = JSON.decode(json)
+
+      {:error, %LanceDB.Error{
+        kind: :invalid_data,
+        operation: :batch_schema,
+        message: message,
+        details: %{reason: ^reason}
+      }} = LanceDB.Batch.schema(batch)
+      true = String.contains?(message, "batch Arrow schema")
+
+      [
+        {[:lancedb, :operation, :stop], %{
+          operation: :batch_schema,
+          operation_id: stop_id,
+          status: :error,
+          error_kind: :invalid_data
+        }},
+        {[:lancedb, :operation, :start], %{operation: :batch_schema, operation_id: start_id}}
+      ] = Process.get(:events)
+      ^start_id = stop_id
+    end
+    IO.puts("batch schema decoding errors normalized")
+    """
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("elixir"),
+        ["--erl", "+S 2:2", "-pa", Path.join(Mix.Project.build_path(), "lib/*/ebin"), "-e", code],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "batch schema decoding errors normalized"
   end
 
   test "native fixed-size lists with non-vector children are described as unsupported", %{

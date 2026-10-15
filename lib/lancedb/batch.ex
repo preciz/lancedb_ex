@@ -46,9 +46,23 @@ defmodule LanceDB.Batch do
   @spec size(t()) :: non_neg_integer()
   def size(%__MODULE__{} = batch), do: Backend.batch_size(batch)
   @doc "Returns the physical ArrowSchema; convert explicitly before table creation."
-  @spec schema(t()) :: {:ok, LanceDB.ArrowSchema.t()} | {:error, JSON.decode_error_reason()}
-  def schema(%__MODULE__{} = batch),
-    do: batch |> Backend.batch_schema() |> SchemaCodec.decode(:arrow)
+  @spec schema(t()) :: LanceDB.result(LanceDB.ArrowSchema.t())
+  def schema(%__MODULE__{} = batch) do
+    LanceDB.Execution.run(:batch_schema, fn ->
+      case batch |> Backend.batch_schema() |> SchemaCodec.decode(:arrow) do
+        {:ok, schema} ->
+          {:ok, schema}
+
+        {:error, reason} ->
+          {:error,
+           %LanceDB.Error{
+             kind: :invalid_data,
+             message: "Could not decode batch Arrow schema: #{inspect(reason)}",
+             details: %{reason: reason}
+           }}
+      end
+    end)
+  end
 
   @doc "Exports one batch as a standard Arrow IPC stream binary."
   @spec to_ipc(t()) :: LanceDB.result(binary())

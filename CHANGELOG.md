@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Return structured `LanceDB.Error` values from `Batch.schema/1` on JSON decoding
+  failures, retaining the decoder reason and emitting a completed operation span.
 - Correct cursor close and native batch-pull typespecs to match their synchronous
   return values and asynchronous acknowledgements.
 - Reject snapshot mutations before planning or execution, and consistently report
