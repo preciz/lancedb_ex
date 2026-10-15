@@ -3,9 +3,12 @@ defmodule LanceDB.NativeOperationContractTest do
   @moduletag :native_operation_contract
 
   alias LanceDB.{
+    Backend,
+    Blob,
     Branch,
     Connection,
     Error,
+    Execution,
     History,
     Index,
     Job,
@@ -16,6 +19,8 @@ defmodule LanceDB.NativeOperationContractTest do
     SchemaEvolution,
     Table
   }
+
+  alias LanceDB.Query.{Definition, Request}
 
   setup %{path: path} do
     {:ok, conn} = Connection.connect(path)
@@ -141,5 +146,84 @@ defmodule LanceDB.NativeOperationContractTest do
              Job.wait(job)
 
     assert {:error, ^error} = Job.wait(job)
+  end
+
+  test "cursor ownership is enforced before active and terminal results", %{table: table} do
+    for state <- [:active, :eof, :error, :closed] do
+      options =
+        case state do
+          :eof -> [filter: "id < 0"]
+          :error -> [filter: "missing = 1"]
+          _ -> []
+        end
+
+      plan = :scan |> Definition.new(options) |> Request.compile()
+      {:ok, cursor} = Backend.stream_open(table, plan, 1)
+
+      try do
+        case state do
+          :eof -> assert {:ok, nil} = Backend.stream_next_batch(cursor)
+          :error -> assert {:error, _} = Backend.stream_next_batch(cursor)
+          :closed -> assert :ok = Backend.stream_close(cursor)
+          :active -> :ok
+        end
+
+        assert {:error, %{message: "Stream cursor belongs to another process"}} =
+                 Task.async(fn -> Backend.stream_next_batch(cursor) end) |> Task.await()
+      after
+        Backend.stream_close(cursor)
+      end
+    end
+  end
+
+  test "blob cursor inspection and cleanup work while read admission is saturated", %{conn: conn} do
+    blob = blob(conn, "abcdef")
+    {:ok, metadata} = Blob.info(blob)
+    {:ok, :ok} = Execution.configure(reads: 1)
+    on_exit(fn -> Execution.configure([]) end)
+    {:ok, table} = Connection.open_table(conn, "rows")
+    plan = :scan |> Definition.new([]) |> Request.compile()
+    {:ok, cursor} = Backend.stream_open(table, plan, 1)
+    assert {:ok, _} = Backend.stream_next_batch(cursor)
+
+    try do
+      assert {:error, %Error{kind: :busy}} = Blob.read(blob, 1)
+      assert {:ok, 0} = Blob.tell(blob)
+      assert {:ok, :ok} = Blob.seek(blob, 2)
+      assert {:ok, 2} = Blob.tell(blob)
+      assert {:ok, ^metadata} = Blob.info(blob)
+      assert {:ok, :ok} = Blob.close(blob)
+      assert {:error, %Error{kind: :invalid_data}} = Blob.tell(blob)
+    after
+      Backend.stream_close(cursor)
+      Blob.close(blob)
+    end
+  end
+
+  test "empty blob streams check handle state lazily and retain cursor positions", %{conn: conn} do
+    blob = blob(conn, "")
+    assert {:ok, :ok} = Blob.seek(blob, 10)
+    assert Enum.to_list(Blob.stream(blob)) == []
+    assert {:ok, 10} = Blob.tell(blob)
+    stream = Blob.stream(blob)
+    assert {:ok, :ok} = Blob.close(blob)
+    closed_stream = Blob.stream(blob)
+
+    for stream <- [stream, closed_stream] do
+      error = assert_raise Error, fn -> Enum.to_list(stream) end
+      assert error.kind == :invalid_data
+      assert error.operation == :blob_read_range
+    end
+  end
+
+  defp blob(conn, value) do
+    {:ok, table} =
+      Connection.create_table(conn, "blobs", [%{id: 1, payload: value}],
+        schema: [id: :int64, payload: :blob]
+      )
+
+    {:ok, [%{"_rowid" => id}]} = Query.query(table, with_row_id: true)
+    {:ok, [blob]} = Blob.open(table, :payload, [id])
+    blob
   end
 end

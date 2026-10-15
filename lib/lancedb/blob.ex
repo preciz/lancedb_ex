@@ -112,7 +112,7 @@ defmodule LanceDB.Blob do
   def seek(%__MODULE__{} = blob, offset),
     do: Execution.run(:blob_seek, fn -> Backend.blob_seek(blob, uint64!(offset, "offset")) end)
 
-  @doc "Returns the current cursor offset."
+  @doc "Returns the current cursor offset without consuming native read admission."
   @spec tell(t()) :: LanceDB.result(non_neg_integer())
   def tell(%__MODULE__{} = blob),
     do: Execution.run(:blob_tell, fn -> Backend.blob_tell(blob) end)
@@ -121,7 +121,7 @@ defmodule LanceDB.Blob do
   @spec size(t()) :: non_neg_integer()
   def size(%__MODULE__{} = blob), do: Backend.blob_size(blob)
 
-  @doc "Returns storage metadata with string keys: size, position, data_path, kind, and uri."
+  @doc "Returns storage metadata with string keys: size, position, data_path, kind, and uri. Position is the physical data-file offset; use tell/1 for the cursor offset."
   @spec info(t()) :: LanceDB.result(map())
   def info(%__MODULE__{} = blob),
     do: Execution.run(:blob_info, fn -> {:ok, JSON.decode!(Backend.blob_info(blob))} end)
@@ -140,6 +140,7 @@ defmodule LanceDB.Blob do
   Enumeration starts at byte zero, leaves the cursor unchanged, and raises
   `LanceDB.Error` on failure. It borrows the handle: halting does not close it.
   Each chunk performs a bounded range read; repeated enumeration is supported.
+  Empty blobs perform a zero-length read during enumeration to check handle state.
   """
   @spec stream(t(), keyword()) :: Enumerable.t()
   def stream(%__MODULE__{} = blob, opts \\ []) do
@@ -149,6 +150,13 @@ defmodule LanceDB.Blob do
     size = size(blob)
 
     Stream.unfold(0, &stream_next(blob, &1, size, chunk_size))
+  end
+
+  defp stream_next(blob, 0, 0, _chunk_size) do
+    case read_range(blob, 0, 0) do
+      {:ok, _} -> nil
+      {:error, error} -> raise error
+    end
   end
 
   defp stream_next(_blob, offset, size, _chunk_size) when offset >= size, do: nil

@@ -5,6 +5,9 @@
 - Reject snapshot mutations before planning or execution, and consistently report
   native write validation versus execution boundaries, including index, tag,
   branch, maintenance, clone and table deletion failures.
+- Enforce cursor ownership before returning cached terminal results. Let blob
+  cursor inspection proceed without read admission, and check closed empty blob
+  handles during lazy stream enumeration.
 - Distinguish malformed Arrow descriptions from unsupported conversions, and
   report returned conversion errors as completed operation spans.
 - Validate connection and backfill arguments inside operation spans, raising
@@ -43,7 +46,7 @@
   Error messages now point to `Table.upsert` and `Table.merge`.
 
 FTS query preparation, standard table optimization, stricter Arrow validation,
-and native write failure fixes require a new matching build
+and native write failure and resource handling fixes require a new matching build
 before publication. `TableCache.connection/2` works with the currently selected
 native binaries.
 

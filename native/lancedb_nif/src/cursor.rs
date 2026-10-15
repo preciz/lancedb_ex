@@ -256,13 +256,13 @@ fn stream_next_batch<'a>(
     cursor: ResourceArc<CursorResource>,
     reference: Term<'a>,
 ) -> Result<Term<'a>, Failure> {
+    if cursor.owner != env.pid() {
+        return Err("Stream cursor belongs to another process".into());
+    }
     if let Some(result) = cursor.channels.terminal.borrow().clone() {
         return Ok(result?
             .map(|batch| ResourceArc::new(crate::batch::BatchResource { batch }))
             .encode(env));
-    }
-    if cursor.owner != env.pid() {
-        return Err("Stream cursor belongs to another process".into());
     }
     match cursor
         .channels

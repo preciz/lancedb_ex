@@ -196,9 +196,8 @@ defmodule LanceDB.StreamTest do
     Process.exit(pid, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
 
-    assert_eventually(fn ->
-      match?({:error, %{message: "Stream is closed"}}, Native.stream_next_batch(cursor))
-    end)
+    # Cleanup may be requested by any holder; pulls remain owned after caller death.
+    assert :ok = Native.stream_close(cursor)
   end
 
   test("row sources consume bounded batches and report partial writes", %{

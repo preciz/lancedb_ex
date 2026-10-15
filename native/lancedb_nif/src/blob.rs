@@ -204,7 +204,7 @@ fn blob_tell(
     blob: ResourceArc<BlobResource>,
     reference: Term<'_>,
 ) -> Result<Atom, Failure> {
-    crate::request::read(env, reference, async move {
+    crate::request::settle(env, reference, async move {
         blob.file.tell().await.map_err(Failure::from_error)
     })
 }
