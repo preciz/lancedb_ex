@@ -1,6 +1,6 @@
 defmodule LanceDB.ErrorContractTest do
   use LanceDB.DataCase, async: false
-  alias LanceDB.{Connection, Error, History, Query, SchemaEvolution}
+  alias LanceDB.{ArrowSchema, Connection, Error, Field, History, Query, Schema, SchemaEvolution}
 
   setup %{path: path} do
     {:ok, conn} = Connection.connect(path)
@@ -34,6 +34,85 @@ defmodule LanceDB.ErrorContractTest do
 
     assert {:ok, _} = Connection.create_empty_table(conn, "empty", id: :int64)
     assert_stop(:create_table, :ok)
+  end
+
+  test "malformed Arrow descriptions raise instead of returning unsupported errors" do
+    field = %Field{name: "id", type: :int64}
+    unsupported = %Field{name: "external", type: {:unsupported, "Union"}}
+
+    for arrow <- [
+          %ArrowSchema{},
+          %ArrowSchema{fields: nil},
+          %ArrowSchema{fields: [field, field]},
+          %ArrowSchema{fields: [field], metadata: []},
+          %ArrowSchema{fields: [field], metadata: %{1 => "invalid"}},
+          %ArrowSchema{fields: [field], metadata: %{"key" => <<255>>}},
+          %ArrowSchema{fields: [field], metadata: %{"key" => "x", key: "y"}},
+          %ArrowSchema{fields: [%{field | nullable: :yes}]},
+          %ArrowSchema{fields: [%{field | name: <<255>>}]},
+          %ArrowSchema{fields: [%{field | metadata: %{1 => "invalid"}}]},
+          %ArrowSchema{fields: [%{field | type: {:vector, 0}}]},
+          %ArrowSchema{
+            fields: [%{field | type: {:vector, 2, %Field{name: "item", type: :int32}}}]
+          },
+          %ArrowSchema{fields: [%{field | type: {:vector, 2, unsupported}}]},
+          %ArrowSchema{fields: [%{field | type: {:dictionary, :float32, :string}}]},
+          %ArrowSchema{fields: [%{field | type: {:dictionary, :int32, :unknown}}]},
+          %ArrowSchema{fields: [%{field | type: {:struct, [field, field]}}]},
+          %ArrowSchema{fields: [%{field | type: {:list, %{field | nullable: nil}}}]},
+          %ArrowSchema{fields: [%{unsupported | type: {:unsupported, <<255>>}}]},
+          %ArrowSchema{fields: [unsupported], metadata: %{1 => "invalid"}},
+          %ArrowSchema{fields: [unsupported, unsupported]}
+        ] do
+      assert_argument_error(:schema_conversion, fn -> ArrowSchema.to_schema(arrow) end)
+    end
+  end
+
+  test "unsupported Arrow descriptions return errors and complete their spans" do
+    unsupported = %Field{name: "external", type: {:unsupported, "Union"}}
+    item = %Field{name: "component", type: :float32, metadata: %{"unit" => "x"}}
+
+    for fields <- [
+          [unsupported],
+          [%Field{name: "nested", type: {:list, unsupported}}],
+          [%Field{name: "nested", type: {:struct, [unsupported]}}],
+          [%Field{name: "nested", type: {:large_list, unsupported}}],
+          [%Field{name: "nested", type: {:dictionary, :int32, {:unsupported, "Union"}}}],
+          [%Field{name: "nested", type: {:dictionary, :int32, {:struct, [unsupported]}}}],
+          [%Field{name: "vector", type: {:vector, 2, item}}]
+        ] do
+      assert {:error, %Error{kind: :unsupported, operation: :schema_conversion}} =
+               ArrowSchema.to_schema(%ArrowSchema{fields: fields})
+
+      assert_stop(:schema_conversion, :error, :unsupported)
+    end
+  end
+
+  test "supported Arrow conversion retains metadata and completes one span" do
+    schema = Schema.new([id: :int64], %{owner: "test"})
+    arrow = %ArrowSchema{fields: schema.fields, metadata: schema.metadata}
+    assert {:ok, ^schema} = ArrowSchema.to_schema(arrow)
+    assert_stop(:schema_conversion, :ok)
+  end
+
+  test "native fixed-size lists with non-vector children are described as unsupported", %{
+    table: table
+  } do
+    for child <- ["Int32", "Decimal128(10, 2)"] do
+      expression = "arrow_cast(make_array(1, 2), 'FixedSizeList(2 x #{child})')"
+      query = table |> Query.new() |> Query.select_as(value: expression)
+
+      assert {:ok, %ArrowSchema{fields: [%Field{type: {:unsupported, description}}]} = arrow} =
+               Query.schema(query)
+
+      assert description =~ "FixedSizeList"
+      assert_stop(:schema, :ok)
+
+      assert {:error, %Error{kind: :unsupported, operation: :schema_conversion}} =
+               ArrowSchema.to_schema(arrow)
+
+      assert_stop(:schema_conversion, :error, :unsupported)
+    end
   end
 
   test "structured cleanup failures preserve the primary error and confirmed commits", %{

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Distinguish malformed Arrow descriptions from unsupported conversions, and
+  report returned conversion errors as completed operation spans.
 - Validate connection and backfill arguments inside operation spans, raising
   `ArgumentError` consistently for invalid inputs.
 - Preserve structured database failures during backfills, source consumption
