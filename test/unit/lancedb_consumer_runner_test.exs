@@ -9,13 +9,13 @@ defmodule LanceDB.ConsumerRunnerTest do
 
     File.write!(Path.join(root, "bin/mix"), """
     #!/usr/bin/env bash
-    for setting in MIX_TARGET MIX_BUILD_PATH MIX_BUILD_ROOT MIX_DEPS_PATH MIX_LOCKFILE MIX_EXS; do
-      if [[ -v "$setting" ]]; then
+    for setting in "${MIX_TARGET+MIX_TARGET}" "${MIX_BUILD_PATH+MIX_BUILD_PATH}" "${MIX_BUILD_ROOT+MIX_BUILD_ROOT}" "${MIX_DEPS_PATH+MIX_DEPS_PATH}" "${MIX_LOCKFILE+MIX_LOCKFILE}" "${MIX_EXS+MIX_EXS}"; do
+      if [[ -n "$setting" ]]; then
         echo "Inherited $setting" >&2
         exit 2
       fi
     done
-    if [[ "$1" == deps.get && -v MIX_ENV ]]; then
+    if [[ "$1" == deps.get && -n "${MIX_ENV+MIX_ENV}" ]]; then
       echo 'Inherited MIX_ENV' >&2
       exit 2
     fi
