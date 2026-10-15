@@ -12,6 +12,9 @@ defmodule LanceDB.Source do
   input is consumed. Sources are lazy and run in the calling process. Reuse
   requires a repeatable enumerable.
   Commit policy belongs to the write operation, independently of chunk size.
+  Structured `LanceDB.Error` exceptions retain their kind and details when input
+  consumption or cleanup fails. Other producer exceptions become errors with
+  kind `:source`.
   """
   alias LanceDB.{Batch, Schema}
   @enforce_keys [:kind, :data]

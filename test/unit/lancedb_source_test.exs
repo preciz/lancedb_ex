@@ -130,6 +130,43 @@ defmodule LanceDB.SourceTest do
     refute_received {^tag, :closed}
   end
 
+  test "structured database failures keep their kind and details during source consumption" do
+    for kind <- [:busy, :storage, :invalid_data] do
+      error = %Error{
+        kind: kind,
+        operation: :stream_next_batch,
+        message: "snapshot read failed",
+        details: %{phase: :execution, context: "original"}
+      }
+
+      source = Stream.map([:fail], fn _ -> raise error end)
+
+      assert {[{:error, ^error}], nil} =
+               Producer.reduce_while(source, [], fn item, items -> {:cont, [item | items]} end)
+    end
+  end
+
+  test "structured cleanup failures stay separate and retain their original details" do
+    for kind <- [:busy, :storage, :invalid_data] do
+      error = %Error{
+        kind: kind,
+        operation: :stream_close,
+        message: "cleanup failed",
+        details: %{phase: :execution, context: "original"}
+      }
+
+      source =
+        Stream.resource(
+          fn -> nil end,
+          fn state -> {[1], state} end,
+          fn _ -> raise error end
+        )
+
+      assert {:primary_failure, ^error} =
+               Producer.reduce_while(source, nil, fn _, _ -> {:halt, :primary_failure} end)
+    end
+  end
+
   defp fail(:raise), do: raise("producer failed")
   defp fail(:throw), do: throw(:producer_failed)
   defp fail(:exit), do: exit(:producer_failed)

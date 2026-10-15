@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve structured database failures during backfills, source consumption
+  and cleanup without replacing primary errors or confirmed write progress.
 - Preserve stream error operation labels during cursor opening, batch pulling,
   and row conversion.
 - Expose `TableCache.connection/2` for shared connection access, including empty

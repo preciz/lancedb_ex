@@ -41,6 +41,7 @@ defmodule LanceDB.Ingestion.Source do
       {status, _} when status in [:done, :halted] -> {:done, :done}
     end
   rescue
+    error in LanceDB.Error -> {{:error, error}, :done}
     error -> {{:error, source_error(Exception.message(error), :input)}, :done}
   catch
     kind, reason -> {{:error, source_error("#{kind}: #{inspect(reason)}", :input)}, :done}
@@ -55,6 +56,7 @@ defmodule LanceDB.Ingestion.Source do
     continuation.({:halt, nil})
     nil
   rescue
+    error in LanceDB.Error -> error
     error -> source_error(Exception.message(error), :cleanup)
   catch
     kind, reason -> source_error("#{kind}: #{inspect(reason)}", :cleanup)
