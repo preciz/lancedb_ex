@@ -14,6 +14,28 @@ defmodule LanceDB.ErrorContractTest do
 
   def event(event, _measurements, metadata, pid), do: send(pid, {event, metadata})
 
+  test "connection argument failures raise inside their operation spans", %{conn: conn} do
+    for value <- [nil, 123, "", " \n", <<255>>] do
+      assert_argument_error(:connect, fn -> Connection.connect(value) end)
+      assert_argument_error(:drop_table, fn -> Connection.drop_table(conn, value) end)
+    end
+
+    for storage <- [nil, [], :invalid, %URI{}] do
+      assert_argument_error(:connect, fn -> Connection.connect("./unused", storage) end)
+    end
+  end
+
+  test "empty table validation and successful creation each emit one span", %{conn: conn} do
+    for schema <- [nil, [], [id: :unknown]] do
+      assert_argument_error(:create_table, fn ->
+        Connection.create_empty_table(conn, "empty", schema)
+      end)
+    end
+
+    assert {:ok, _} = Connection.create_empty_table(conn, "empty", id: :int64)
+    assert_stop(:create_table, :ok)
+  end
+
   test "structured cleanup failures preserve the primary error and confirmed commits", %{
     table: table
   } do
@@ -49,6 +71,14 @@ defmodule LanceDB.ErrorContractTest do
     assert committed == version + 1
     assert {:ok, ^committed} = History.version(table)
     assert {:ok, [%{"id" => 1}, %{"id" => 2}]} = Query.query(table, order_by: [asc: :id])
+  end
+
+  test "backfill validates mapper arity inside its operation span", %{table: table} do
+    for mapper <- [nil, :mapper, fn -> [] end, fn _, _ -> [] end] do
+      assert_argument_error(:backfill_columns, fn ->
+        SchemaEvolution.backfill_columns(table, [extra: :int64], mapper)
+      end)
+    end
   end
 
   test "backfill snapshot planning failures keep their kind and do not commit", %{table: table} do
@@ -160,5 +190,29 @@ defmodule LanceDB.ErrorContractTest do
 
     assert status == 0, output
     assert output =~ "stream origins and backfill read failures preserved"
+  end
+
+  defp assert_argument_error(operation, fun) do
+    assert_raise ArgumentError, fun
+    assert_receive {[:lancedb, :operation, :start], %{operation: ^operation, operation_id: id}}
+
+    assert_receive {[:lancedb, :operation, :exception],
+                    %{operation: ^operation, operation_id: ^id, kind: :error}}
+
+    refute_received {[:lancedb, :operation, _], _}
+  end
+
+  defp assert_stop(operation, status, kind \\ nil) do
+    assert_receive {[:lancedb, :operation, :start], %{operation: ^operation, operation_id: id}}
+
+    assert_receive {[:lancedb, :operation, :stop],
+                    %{
+                      operation: ^operation,
+                      operation_id: ^id,
+                      status: ^status,
+                      error_kind: ^kind
+                    }}
+
+    refute_received {[:lancedb, :operation, _], _}
   end
 end

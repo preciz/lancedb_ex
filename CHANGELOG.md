@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Validate connection and backfill arguments inside operation spans, raising
+  `ArgumentError` consistently for invalid inputs.
 - Preserve structured database failures during backfills, source consumption
   and cleanup without replacing primary errors or confirmed write progress.
 - Preserve stream error operation labels during cursor opening, batch pulling,

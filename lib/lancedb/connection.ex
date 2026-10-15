@@ -39,11 +39,10 @@ defmodule LanceDB.Connection do
   spawned SDK tasks may outlive the operation.
   """
   @spec connect(String.t(), map(), keyword()) :: result(connection())
-  def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ [])
-      when is_binary(uri) and is_map(storage_options) do
+  def connect(uri \\ "./lancedb", storage_options \\ %{}, opts \\ []) do
     LanceDB.Execution.run(:connect, fn ->
       Backend.connect(
-        uri,
+        Options.string!(uri, "URI"),
         LanceDB.StorageOptions.normalize!(storage_options),
         connect_options!(opts)
       )
@@ -112,8 +111,10 @@ defmodule LanceDB.Connection do
   @spec create_empty_table(connection(), String.t(), LanceDB.Schema.t() | list(), keyword()) ::
           result(table())
   def create_empty_table(conn, name, schema, opts \\ []) do
-    if is_nil(schema), do: raise(ArgumentError, "an explicit schema is required")
-    create_table(conn, name, LanceDB.Source.rows([], schema: schema), opts)
+    LanceDB.Execution.run(:create_table, fn ->
+      if is_nil(schema), do: raise(ArgumentError, "an explicit schema is required")
+      LanceDB.Creation.create(conn, name, LanceDB.Source.rows([], schema: schema), opts)
+    end)
   end
 
   @doc "Creates a shallow clone sharing source files. Options: source_version or source_tag. Retain the source files while clones reference them."
@@ -236,7 +237,9 @@ defmodule LanceDB.Connection do
   Drops a table from the database.
   """
   @spec drop_table(connection(), String.t()) :: result(:dropped)
-  def drop_table(conn, name) when is_binary(name) do
-    LanceDB.Execution.run(:drop_table, fn -> Backend.drop_table(conn, name) end)
+  def drop_table(conn, name) do
+    LanceDB.Execution.run(:drop_table, fn ->
+      Backend.drop_table(conn, Options.string!(name, "table name"))
+    end)
   end
 end

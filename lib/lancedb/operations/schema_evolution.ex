@@ -120,7 +120,10 @@ defmodule LanceDB.Operations.SchemaEvolution do
         ) ::
           LanceDB.Backend.result(LanceDB.Backend.write_output())
           | {:error, map() | LanceDB.Error.t() | String.t()}
-  def backfill_columns(table, schema, mapper, opts) when is_function(mapper, 1) do
+  def backfill_columns(table, schema, mapper, opts) do
+    if not is_function(mapper, 1),
+      do: raise(ArgumentError, "backfill mapper must be a function of arity one")
+
     opts = Keyword.validate!(opts, [:read_columns, :batch_size])
     {size, opts} = Options.batch_size!(opts)
 
