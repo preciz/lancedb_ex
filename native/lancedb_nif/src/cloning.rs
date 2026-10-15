@@ -7,7 +7,7 @@ use lance::dataset::{CommitBuilder, WriteDestination};
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::sync::Arc;
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn clone_table(
     env: Env<'_>,
     conn: ResourceArc<ConnectionResource>,

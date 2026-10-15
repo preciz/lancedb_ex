@@ -16,7 +16,7 @@ pub(crate) fn schema_json(schema: &arrow_schema::Schema) -> String {
     serde_json::json!({"fields": fields, "metadata": schema.metadata()}).to_string()
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn get_schema_json(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,

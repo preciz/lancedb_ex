@@ -19,7 +19,7 @@ pub(crate) fn session(
     )))
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn cache_stats(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

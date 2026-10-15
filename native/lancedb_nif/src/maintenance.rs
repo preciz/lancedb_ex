@@ -2,7 +2,7 @@ use crate::error::Failure;
 use crate::resources::{atoms, TableResource};
 use rustler::{Atom, Env, ResourceArc, Term};
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn optimize(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -33,7 +33,7 @@ fn optimize(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn table_stats(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -61,7 +61,7 @@ fn table_stats(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn optimize_indices(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -86,7 +86,7 @@ fn optimize_indices(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn compact_files(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -116,7 +116,7 @@ fn compact_files(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn cleanup_old_versions(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -176,7 +176,7 @@ fn cleanup_stats(stats: lance::dataset::cleanup::RemovalStats) -> serde_json::Va
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn uses_v2_manifest_paths(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -193,7 +193,7 @@ fn uses_v2_manifest_paths(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn migrate_manifest_paths_v2(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

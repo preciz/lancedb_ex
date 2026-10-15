@@ -13,7 +13,7 @@ enum SourceRef {
     Branch { name: String, version: Option<u64> },
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn create_branch(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -46,7 +46,7 @@ fn create_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn checkout_branch(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -66,7 +66,7 @@ fn checkout_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn list_branches(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -94,7 +94,7 @@ fn current_branch(table: ResourceArc<TableResource>) -> Result<String, Failure> 
         .unwrap_or_else(|| "main".into()))
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn delete_branch(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -114,7 +114,7 @@ fn delete_branch(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn table_uri(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

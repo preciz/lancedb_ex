@@ -3,7 +3,7 @@ use crate::resources::{atoms, TableResource};
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn list_tags(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -21,7 +21,7 @@ fn list_tags(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn tag_version(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -34,7 +34,7 @@ fn tag_version(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn tag_action(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -71,7 +71,7 @@ fn tag_action(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn table_version(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -82,7 +82,7 @@ fn table_version(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn list_versions(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -103,7 +103,7 @@ fn list_versions(
 
 // SDK branch checkout creates an independent DatasetConsistencyWrapper, including
 // for main. Cloning Table/Arc alone would still share the mutable view.
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn snapshot_table(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -133,7 +133,7 @@ fn snapshot_table(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn restore_version(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

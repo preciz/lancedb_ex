@@ -87,6 +87,10 @@ are encoded in an owned environment after I/O; message transfer shares their
 binary storage. The SDK's synchronous merge reader bridges to its input stream
 only on background blocking threads.
 
+Native dispatch functions with only resource handles and simple controls run on
+normal schedulers. Connect/open JSON decoding, row and batch codecs, and bulk
+term decoding such as schema metadata maps use dirty CPU schedulers.
+
 Write dispatch supplies validation/not-started metadata for unmarked preparation
 failures. Mutation calls and fallible processing after mutation explicitly mark
 execution/unknown outcomes, which dispatch preserves. All table mutations check

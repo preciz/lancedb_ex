@@ -141,7 +141,7 @@ fn index_builder(
     Ok(builder)
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn create_index(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -159,7 +159,7 @@ fn create_index(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn create_index_async(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -178,7 +178,7 @@ fn create_index_async(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn list_indices(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -199,7 +199,7 @@ fn list_indices(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn index_stats(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -243,7 +243,7 @@ fn index_stats(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn drop_index(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,
@@ -262,7 +262,7 @@ fn drop_index(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn prewarm_index(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,

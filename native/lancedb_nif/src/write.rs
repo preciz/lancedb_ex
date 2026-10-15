@@ -110,7 +110,7 @@ struct DeleteResult {
     version: u64,
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn delete_rows_result(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

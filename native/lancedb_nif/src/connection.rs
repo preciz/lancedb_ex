@@ -15,7 +15,7 @@ struct ConnectOptions {
     metadata_cache_size_bytes: Option<usize>,
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn connect(
     env: Env<'_>,
     uri: String,
@@ -43,7 +43,7 @@ fn connect(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn table_names(
     env: Env<'_>,
     conn_res: ResourceArc<ConnectionResource>,
@@ -69,7 +69,7 @@ fn table_names(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn drop_table(
     env: Env<'_>,
     conn_res: ResourceArc<ConnectionResource>,

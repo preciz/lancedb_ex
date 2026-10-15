@@ -3,7 +3,7 @@ use crate::resources::TableResource;
 use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn schema_metadata(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
@@ -51,7 +51,7 @@ async fn update_schema_metadata_impl(
     Ok(version)
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn update_field_metadata(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

@@ -8,6 +8,9 @@
 - Enforce cursor ownership before returning cached terminal results. Let blob
   cursor inspection proceed without read admission, and check closed empty blob
   handles during lazy stream enumeration.
+- Run native dispatch on normal schedulers while keeping synchronous JSON and
+  bulk term decoding on dirty CPU schedulers. Verify the new native operation
+  contracts in source builds and against every packaged candidate binary.
 - Distinguish malformed Arrow descriptions from unsupported conversions, and
   report returned conversion errors as completed operation spans.
 - Validate connection and backfill arguments inside operation spans, raising

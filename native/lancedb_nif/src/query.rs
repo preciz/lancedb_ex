@@ -98,7 +98,7 @@ fn query_execute(
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn count_rows(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,

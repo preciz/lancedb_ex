@@ -69,7 +69,7 @@ impl OpenOptions {
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn open_table(
     env: Env<'_>,
     conn: ResourceArc<ConnectionResource>,
