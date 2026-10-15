@@ -38,6 +38,39 @@ Other writes report `nil` if the SDK cannot give a commit count. Public
 writes inside callbacks return the same result structs as direct calls. Each
 public API call inside a callback creates a separate telemetry span.
 
+## Arrow batches
+
+`LanceDB.Batch.from_rows/2` encodes row maps against an explicit
+`LanceDB.Schema`. Inspect or export the resulting batch before writing it:
+
+```elixir
+alias LanceDB.{ArrowSchema, Batch, Connection, Schema, Source, Table}
+
+schema = Schema.new([id: :int64, text: :string], %{owner: "example"})
+{:ok, batch} = Batch.from_rows([%{id: 1, text: "Elixir and OTP"}], schema)
+1 = Batch.size(batch)
+{:ok, %ArrowSchema{} = arrow_schema} = Batch.schema(batch)
+{:ok, [%{"id" => 1, "text" => "Elixir and OTP"}]} = Batch.to_rows(batch)
+
+{:ok, ipc} = Batch.to_ipc(batch)
+{:ok, imported_batches} = Batch.from_ipc(ipc)
+{:ok, write_schema} = ArrowSchema.to_schema(arrow_schema)
+{:ok, target} = Connection.create_empty_table(db, "batch_copy", write_schema)
+{:ok, %LanceDB.WriteResult{inserted: 1}} = Table.add(target, Source.batches(imported_batches))
+```
+
+`Batch.size/1` returns a bare row count without converting rows. `Batch.schema/1`
+returns `{:ok, %LanceDB.ArrowSchema{}}`, preserving physical field definitions
+and metadata. Convert it with `ArrowSchema.to_schema/1` before table creation
+or passing it as a source schema. Fallible batch helpers return
+`{:error, %LanceDB.Error{}}` on operational failures.
+
+`to_rows/1` explicitly converts data to string-keyed maps. `to_ipc/1` exports
+one batch as an Arrow IPC stream; `from_ipc/1` materializes every batch in an
+IPC stream binary. `Source.batches/2` consumes compatible batches without
+converting them to Elixir rows. Batches are immutable and shareable between
+processes; retaining a batch also retains its Arrow buffers.
+
 ## Streaming reads and ingestion
 
 `LanceDB.Query.stream/2` returns a lazy Enumerable of row maps from a query

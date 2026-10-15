@@ -88,6 +88,10 @@ Regular queries return descriptors. To read a payload, use a fetch API.
 Fetch APIs support top-level blobs and blobs nested in structs. The pinned
 SDK cannot fetch individual list elements by row ID.
 
+Use `LanceDB.Blob.columns/1` to discover blob paths in schema order. Nested
+struct fields use dotted paths such as `"details.payload"`. A table without
+blob fields returns `{:ok, []}`.
+
 ```elixir
 alias LanceDB.{Blob, Connection, Query, Schema, Table}
 
@@ -95,6 +99,7 @@ schema = Schema.new(id: :int64, payload: :blob)
 {:ok, assets} = Connection.create_table(db, "assets",
   [%{id: 1, payload: <<0, 255, 128, 42>>}], schema: schema)
 
+{:ok, ["payload"]} = Blob.columns(assets)
 {:ok, [row]} = Query.query(assets, filter: "id = 1", with_row_id: true)
 row_id = row["_rowid"]
 {:ok, [bytes]} = LanceDB.Blob.fetch(assets, :payload, [row_id])

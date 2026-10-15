@@ -5,6 +5,75 @@
 These examples use `db` and `table` handles. See the [API guide](api.md) for setup.
 Match the table schema to each example.
 
+## Building reusable queries
+
+`LanceDB.Query.new/2` builds a scan. Pipe source selectors and modifiers into
+it to build a reusable query without accessing storage:
+
+```elixir
+alias LanceDB.Query
+
+query =
+  table
+  |> Query.new()
+  |> Query.where("category = 'code'")
+  |> Query.select([:id, :text])
+  |> Query.order_by(asc: :id)
+  |> Query.limit(20)
+  |> Query.offset(0)
+  |> Query.timeout(5_000)
+
+{:ok, rows} = Query.all(query)
+stream = Query.stream(query, batch_size: 256)
+{:ok, plan} = Query.explain(query)
+```
+
+Each builder returns a new query value. Choose one source with these selectors:
+
+| Builder | Source |
+| --- | --- |
+| `Query.nearest_to(query, vector)` | One nearest-neighbor search. |
+| `Query.text(query, text)` | Full-text search with a string or structured FTS query. |
+| `Query.hybrid(query, vector, text)` | Combined vector and full-text search. |
+| `Query.nearest_to_many(query, vectors)` | Independent vector searches, identified by `query_index`. |
+| `Query.multivector(query, vectors)` | One search against documents containing multiple embeddings. |
+| `Query.row_ids(query, ids)` | Direct retrieval by internal `_rowid`. |
+| `Query.row_offsets(query, offsets)` | Direct retrieval by physical row offset. |
+
+`Query.new(table, source, opts)` is the equivalent explicit-source constructor.
+A source selector replaces the previous source and retains explicit options,
+validating them against the new source. An implicit scan limit changes from
+100 to the search default of 10; an explicit limit is retained.
+
+Use these modifiers for the selected source:
+
+| Builder | Control |
+| --- | --- |
+| `Query.options(query, opts)` | Merge keyword options, including source-specific search controls. |
+| `Query.where(query, predicate)` | Set `:filter` to a SQL string or `LanceDB.Expr`; `nil` clears it. |
+| `Query.select(query, columns)` | Set `:columns` to field names. |
+| `Query.select_as(query, expressions)` | Set `:select` to named SQL strings or `LanceDB.Expr` projections. |
+| `Query.order_by(query, ordering)` | Set `:order_by`, including per-column null placement. |
+| `Query.limit(query, count)` | Set `:limit`; `nil` removes a scan limit. |
+| `Query.offset(query, count)` | Set the non-negative result offset. |
+| `Query.timeout(query, milliseconds)` | Set `:timeout_ms`; `nil` disables the deadline. |
+
+Options are validated at each step. Select a source before setting controls
+specific to it. Direct retrieval accepts only projection, `:with_row_id`, and
+`:timeout_ms`. `select/2` and `select_as/2` are mutually exclusive; to switch
+from named columns to expressions, use
+`Query.options(query, columns: nil, select: [label: "upper(text)"])`.
+Repeated modifiers replace the corresponding option. Use `Expr.all/1` to
+combine predicates instead of chaining `where/2` calls.
+
+`all/1`, `stream/2`, `stream_batches/2`, `explain/2`, `analyze/1`, and
+`schema/1` execute the same query value. Streams execute during enumeration;
+their only option is `:batch_size`. A positive timeout covers the complete
+request, including consumer pauses for streams. See the
+[search guide](search.md#reusable-text-and-hybrid-queries) for text and hybrid
+builders, and [batch and multivector search](#batch-and-multivector-search)
+for their result semantics.
+
 ## Read consistency
 
 Use the third argument to `connect/3` to control when table handles check
@@ -105,6 +174,11 @@ include `all`, `any`, `negate`, `in_list`, `like`, `ilike`, `is_null`, and `is_n
 child. `col/2` qualifies a column with a merge relation. `call/2` calls SDK
 scalar functions.
 
+`Expr.lit/1` explicitly wraps a literal, for example `E.lit("O'Reilly")`
+or `E.lit(~D[2024-02-29])`. It accepts `nil`, booleans, numbers, UTF-8 text,
+and ISO dates, and returns an existing expression unchanged. Other builders
+wrap plain values with `lit/1` automatically.
+
 For example, `arrow_cast` selects a specific Arrow type. `binary/1`
 represents arbitrary bytes. Ordinary strings represent text. Integer
 literals keep int64 or uint64 precision. Float literals use float64.
@@ -161,15 +235,18 @@ row_ids = Enum.map(matches, & &1["_rowid"])
 {:ok, sample} = LanceDB.Query.take_offsets(table, [0, 10, 20], columns: [:id, :text])
 
 rows =
-  LanceDB.Query.stream(
-    LanceDB.Query.new(table, {:take, :row_ids, row_ids}, select: [label: "upper(text)"]),
-    batch_size: 1024
-  )
+  table
+  |> LanceDB.Query.new()
+  |> LanceDB.Query.row_ids(row_ids)
+  |> LanceDB.Query.select_as(label: "upper(text)")
+  |> LanceDB.Query.stream(batch_size: 1024)
 
 {:ok, plan} =
-  LanceDB.Query.explain(LanceDB.Query.new(table, {:take, :row_offsets, [0, 10]}, columns: [:id]),
-    verbose: false
-  )
+  table
+  |> LanceDB.Query.new()
+  |> LanceDB.Query.row_offsets([0, 10])
+  |> LanceDB.Query.select([:id])
+  |> LanceDB.Query.explain(verbose: false)
 ```
 
 Both take functions accept `:columns` or `:select`, `:with_row_id`, and
@@ -511,13 +588,17 @@ vector**.
 vectors = [[1.0, 0.0, 0.2], [0.0, 1.0, 0.8]]
 {:ok, rows} = LanceDB.Query.batch_search(table, vectors, limit: 5, columns: [:id])
 by_query = Enum.group_by(rows, & &1["query_index"])
-rows = LanceDB.Query.stream(LanceDB.Query.new(table, {:batch, vectors}, limit: 5), batch_size: 2)
 
-{:ok, plan} =
-  LanceDB.Query.explain(LanceDB.Query.new(table, {:batch, vectors}, limit: 5), verbose: false)
+query =
+  table
+  |> LanceDB.Query.new()
+  |> LanceDB.Query.nearest_to_many(vectors)
+  |> LanceDB.Query.limit(5)
 
-{:ok, analysis} = LanceDB.Query.analyze(LanceDB.Query.new(table, {:batch, vectors}, limit: 5))
-{:ok, schema} = LanceDB.Query.schema(LanceDB.Query.new(table, {:batch, vectors}, columns: [:id]))
+rows = LanceDB.Query.stream(query, batch_size: 2)
+{:ok, plan} = LanceDB.Query.explain(query, verbose: false)
+{:ok, analysis} = LanceDB.Query.analyze(query)
+{:ok, schema} = query |> LanceDB.Query.select([:id]) |> LanceDB.Query.schema()
 ```
 
 Results are flat maps with `_distance` and zero-based `query_index`. These
@@ -557,9 +638,12 @@ Cosine is the default and only supported metric.
   )
 
 rows =
-  LanceDB.Query.stream(LanceDB.Query.new(documents, {:multivector, [[1, 0], [0, 1]]}, limit: 5),
-    batch_size: 1024
-  )
+  documents
+  |> LanceDB.Query.new()
+  |> LanceDB.Query.multivector([[1, 0], [0, 1]])
+  |> LanceDB.Query.options(vector_column: :embeddings)
+  |> LanceDB.Query.limit(5)
+  |> LanceDB.Query.stream(batch_size: 1024)
 ```
 
 Use `[[1, 0]]` for a single query embedding. The package checks the stored

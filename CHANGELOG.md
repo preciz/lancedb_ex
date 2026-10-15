@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Document pipeable query builders, explicit expression literals, reusable index
+  definitions, blob column discovery, and batch construction and inspection.
 - Return structured `LanceDB.Error` values from `Batch.schema/1` on JSON decoding
   failures, retaining the decoder reason and emitting a completed operation span.
 - Correct cursor close and native batch-pull typespecs to match their synchronous

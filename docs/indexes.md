@@ -28,6 +28,23 @@ Create indexes, inspect their coverage, and remove them by name:
 {:ok, matches} = LanceDB.Query.search(table, [1, 0, 0], distance: :cosine)
 ```
 
+Use `LanceDB.Index.new/1` to validate options once and retain a reusable
+`%LanceDB.Index.Definition{}`. Both creation functions accept it in place of
+keyword options:
+
+```elixir
+alias LanceDB.{Index, Job}
+
+lookup = Index.new(type: :btree)
+{:ok, :created} = Index.create(table, :id, lookup)
+{:ok, job} = Index.create_async(table, :text, lookup)
+{:ok, :created} = Job.wait(job)
+```
+
+A definition stores index options; each creation call supplies its table and
+column. Construction accesses no storage. Column compatibility and vector
+training requirements are checked when the index is created.
+
 Each index covers one column. Supported types:
 
 - `:auto` (default): lets LanceDB choose an index for the column.

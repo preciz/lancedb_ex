@@ -42,6 +42,22 @@ rows = query |> Query.stream(batch_size: 256) |> Enum.to_list()
 {:ok, imported_batches} = Batch.from_ipc(ipc)
 ```
 
+Build batches directly from rows with an explicit schema:
+
+```elixir
+{:ok, input_batch} =
+  Batch.from_rows([%{id: 2, text: "OTP", vector: [0.0, 1.0, 0.0]}], schema)
+
+1 = Batch.size(input_batch)
+{:ok, %LanceDB.ArrowSchema{} = input_arrow_schema} = Batch.schema(input_batch)
+{:ok, rows} = Batch.to_rows(input_batch)
+```
+
+`Batch.size/1` returns a bare row count; `Batch.schema/1` returns the physical
+Arrow description, including metadata. Convert that description with
+`ArrowSchema.to_schema/1` before using it for creation or as a source schema.
+See [Arrow batches](writes.md#arrow-batches) for IPC and batch ingestion.
+
 `Query.all/1` reads all results immediately. `Query.stream/2` reads results
 on demand. Both use the same query options. Scans have a default limit of
 100 rows. Searches have a default limit of 10 rows. Use

@@ -85,6 +85,48 @@ RRF scores indicate rank. They are not probabilities. Invalid options raise
 `ArgumentError`. Native search failures return `{:error,
 reason}`.
 
+## Reusable text and hybrid queries
+
+Use `Query.text/2` or `Query.hybrid/3` to select a source on a reusable query:
+
+```elixir
+alias LanceDB.{FTS, Query}
+
+base =
+  table
+  |> Query.new()
+  |> Query.where("category = 'code'")
+  |> Query.select([:id, :text])
+
+text_query =
+  base
+  |> Query.text(FTS.match("elixir concurrency", column: :text))
+  |> Query.options(text_column: :text)
+  |> Query.limit(10)
+
+hybrid_query =
+  base
+  |> Query.hybrid([0.9, 0.1, 0.2], "elixir concurrency")
+  |> Query.options(vector_column: :vector, text_column: :text, distance: :cosine, rrf_k: 60)
+  |> Query.limit(10)
+  |> Query.offset(0)
+  |> Query.timeout(5_000)
+
+{:ok, matches} = Query.all(text_query)
+matches = Query.stream(hybrid_query, batch_size: 64)
+{:ok, plan} = Query.explain(hybrid_query)
+```
+
+Both branches retain the base query's filter and selected columns. Builders
+validate options without accessing storage. `Query.options/2` merges controls
+for the selected source, including `:reranker` and `:normalize` for hybrid
+queries. For computed projections, replace the base's `Query.select/2` call
+with `Query.select_as/2`. Use `Query.order_by/2` for explicit ordering.
+`Query.all/1`, row and batch streams, and diagnostics use the same query value.
+See [query builders](queries.md#building-reusable-queries)
+for all selectors and modifiers, including vector, batch, multivector, and direct
+retrieval sources.
+
 ## Custom hybrid ranking and ordering
 
 Hybrid search accepts `reranker: :rrf` by default. It also accepts a
