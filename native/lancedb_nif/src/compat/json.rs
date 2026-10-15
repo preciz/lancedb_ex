@@ -21,13 +21,13 @@ pub(crate) fn validate(bytes: &[u8]) -> Result<(), Failure> {
 /// outside list/map offsets before SDK conversion visits physical child arrays.
 pub(crate) fn mask_unreachable(batch: &RecordBatch) -> Result<RecordBatch, Failure> {
     let schema = batch.schema();
-    let range = [0..batch.num_rows()];
+    let range = 0..batch.num_rows();
     let mut changed = false;
     let mut columns = Vec::with_capacity(batch.num_columns());
     for (index, field) in schema.fields().iter().enumerate() {
         let column = batch.column(index);
         if is_nested_with_json(field) {
-            if let Some(masked) = mask_array(field, column, &range)? {
+            if let Some(masked) = mask_array(field, column, std::slice::from_ref(&range))? {
                 changed = true;
                 columns.push(masked);
                 continue;
