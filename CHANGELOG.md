@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Clarify table cache success and structured error return values, including
   background warming failures, saturation, missing entries, and invalidation.
@@ -47,7 +47,7 @@
 - Isolate fresh consumer verification from inherited Mix environment, target,
   project, build and dependency paths so custom maintainer settings cannot
   redirect the temporary project's compilation or release.
-- Gate unreleased FTS preparation and standard optimization checks on native
+- Gate FTS preparation and standard optimization checks on native
   support. Run Arrow value-validation regressions in source builds and explicitly
   include them for every packaged candidate native binary.
 - Initialize the shared native runtime with Rust's standard `LazyLock`, removing
@@ -55,11 +55,6 @@
 - Remove redundant table-name and source-schema normalization, unused formatter
   and package-ignore entries, and obsolete `merge_insert` advice in write errors.
   Error messages now point to `Table.upsert` and `Table.merge`.
-
-FTS query preparation, standard table optimization, stricter Arrow validation,
-and native write failure and resource handling fixes require a new matching build
-before publication. `TableCache.connection/2` works with the currently selected
-native binaries.
 
 ### Breaking changes
 

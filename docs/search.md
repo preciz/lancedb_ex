@@ -313,9 +313,6 @@ an index's saved settings. This is useful because exact queries use the index
 analyzer, while positive fuzzy distances use basic tokenization: raw uppercase,
 accented, or unstemmed text can fail fuzzy matches even when it matches exactly.
 
-This API is unreleased and requires a source build until matching native
-archives are selected. It is not included in the published `0.3.0` package.
-
 ```elixir
 alias LanceDB.{FTS, Query}
 

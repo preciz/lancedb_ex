@@ -322,9 +322,6 @@ can complete before cleanup or index optimization fails. Failures return a
 Caller death does not cancel an admitted write; native admission remains held
 until the SDK operation settles.
 
-This unreleased operation requires `LANCEDB_BUILD=true` until matching native
-binaries are published and selected. It is absent from Hex version `0.3.0`.
-
 `compact_files/2` defaults to 1,048,576 target rows per fragment. It uses
 the SDK's other compaction defaults, including index remapping. Its result
 contains `Maintenance.Compaction` fields `:fragments_removed`,

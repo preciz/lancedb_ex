@@ -39,8 +39,8 @@ The default suite does not need an S3 service or Phoenix application.
 CI runs the S3 suite separately.
 
 Tests tagged `:fts_preparation` run when the loaded NIF supports preparation.
-The currently selected public build lacks that unreleased feature, so default
-tests skip those checks. Source builds require it; packaged candidate builds
+Both the selected public build and source builds support it, while older
+artifacts skip those checks. Source builds require it; packaged candidate builds
 automatically run the checks when their NIF implements it. Consumer smoke
 validation uses the same empty-analysis probe and keeps checking existing APIs
 with older native builds. Unexpected preparation errors fail verification.
@@ -51,17 +51,17 @@ raises `:badarg` for the matching NIF, while an older stub raises `:nif_not_load
 Source builds require support; unexpected errors fail verification. Consumer
 validation exercises optimization on its temporary table when support is present.
 
-Tests tagged `:native_value_validation` check stricter Arrow write validation that
-the currently selected published NIF lacks. Source builds run these tests, and
-the native packaging workflow explicitly includes them against every candidate
-binary without compiling Rust in the consumer project. To verify a matching
-precompiled build locally, run `mix test --include native_value_validation`.
+Tests tagged `:native_value_validation` check stricter Arrow write validation.
+Source builds run these tests automatically, and the native packaging workflow
+explicitly includes them against every candidate binary without compiling Rust
+in the consumer project. To verify a precompiled build locally, run
+`mix test --include native_value_validation`.
 
 Tests tagged `:native_operation_contract` cover snapshot mutation rejection,
-write-boundary metadata, cursor ownership and blob admission. The selected
-published NIF predates these fixes. Source builds run these checks, and the
-packaging workflow explicitly includes them against every candidate binary.
-For a matching precompiled build, run `mix test --include native_operation_contract`.
+write-boundary metadata, cursor ownership and blob admission. Source builds run
+these checks automatically, and the packaging workflow explicitly includes them
+against every candidate binary. For a precompiled build, run
+`mix test --include native_operation_contract`.
 
 Rust changes require source-build validation and a new immutable native build
 before release. Passing tests with previously selected archives does not

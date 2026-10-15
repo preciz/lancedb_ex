@@ -6,18 +6,13 @@ This package embeds [LanceDB](https://lancedb.com/) in Elixir through Rustler.
 Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
 
-The Elixir package version is `0.3.0`. The Rust software development kit
+The Elixir package version is `0.4.0`. The Rust software development kit
 (SDK) is pinned to `0.40.0`. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
 public download and production release checks on Linux x86_64, Linux ARM64,
-and Apple Silicon macOS, including supervised table caching, background FTS
-warming, and shared cache reuse.
-
-Unreleased FTS query preparation, standard table optimization, stricter Arrow
-batch write validation, and native write failure and resource handling fixes require
-`LANCEDB_BUILD=true` until a new matching native build is published and selected.
-Version `0.3.0` does not include these changes. The unreleased table-cache
-connection accessor works with the currently selected native binaries.
+and Apple Silicon macOS, including supervised table caching, shared cache
+connections, background FTS warming, shared cache reuse, FTS query preparation,
+and standard table optimization.
 
 ## Requirements
 
@@ -35,7 +30,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.3.0"}
+    {:lancedb_ex, "~> 0.4.0"}
   ]
 end
 ```

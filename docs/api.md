@@ -87,8 +87,8 @@ Failures use stable error kinds.
 `FTS.prepare/2` and `/3` perform analyzer work and emit `:prepare_fts` spans.
 They return reusable `FTS.Prepared` values for exact/fuzzy query construction.
 `FTS.match/2`, `FTS.term_count/1`, and `FTS.Prepared.terms/1` are pure operations.
-See [query preparation](search.md#preparing-exact-and-fuzzy-terms) for the
-unreleased API, analyzer restrictions, input limits, and examples.
+See [query preparation](search.md#preparing-exact-and-fuzzy-terms) for
+analyzer restrictions, input limits, and examples.
 
 ## Quick start
 

@@ -1,8 +1,8 @@
 %{
-  id: "0.0.0+0e89cc70c0553e0dcf6a017e3129c4a91939700d",
-  tag: "native-0e89cc70c0553e0dcf6a017e3129c4a91939700d",
+  id: "0.0.0+beb797032e4d297ec4024b6f96989883ed269beb",
+  tag: "native-beb797032e4d297ec4024b6f96989883ed269beb",
   repository: "preciz/lancedb_ex",
-  source_revision: "0e89cc70c0553e0dcf6a017e3129c4a91939700d",
+  source_revision: "beb797032e4d297ec4024b6f96989883ed269beb",
   sdk_version: "0.40.0",
-  default_url: "https://github.com/preciz/lancedb_ex/releases/download/native-0e89cc70c0553e0dcf6a017e3129c4a91939700d"
+  default_url: "https://github.com/preciz/lancedb_ex/releases/download/native-beb797032e4d297ec4024b6f96989883ed269beb"
 }

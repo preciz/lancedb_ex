@@ -12,8 +12,6 @@ defmodule LanceDB.Batch do
   batch also checks the destination schema and logical value constraints,
   including finite floats, temporal ranges, decimal precision and non-null
   vector elements, without converting the batch to Elixir rows.
-  The stricter native value checks require a new matching native build before
-  the next package release; the currently selected published binary lacks them.
   """
   alias LanceDB.{Backend, Records, Result, Schema}
   @enforce_keys [:resource]
