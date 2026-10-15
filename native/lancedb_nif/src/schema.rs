@@ -171,7 +171,7 @@ fn validate_renames(
     Ok(())
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn alter_columns(
     env: Env<'_>,
     table_res: ResourceArc<TableResource>,

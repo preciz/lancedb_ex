@@ -109,7 +109,7 @@ async fn merge_stream_open_impl(
     WriterResource::start(owner, schema, worker)
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn columns_stream_open(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

@@ -51,7 +51,7 @@ async fn update_schema_metadata_impl(
     Ok(version)
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn update_field_metadata(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

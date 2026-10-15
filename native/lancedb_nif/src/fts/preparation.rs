@@ -64,7 +64,7 @@ fn prepare_fts(
     crate::compat::fts::tokenize(|| prepared_json(&text, &builder, max_terms))?
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn prepare_fts_table(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

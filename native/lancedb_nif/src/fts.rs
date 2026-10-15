@@ -221,7 +221,7 @@ fn tokenize(text: String, analyzer: String) -> Result<String, Failure> {
     crate::compat::fts::tokenize(|| tokens_json(&text, &builder))?
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn tokenize_table(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

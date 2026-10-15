@@ -33,7 +33,7 @@ impl WriterResource {
     }
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
+#[rustler::nif]
 fn ingest_open(
     env: Env<'_>,
     table: ResourceArc<TableResource>,
