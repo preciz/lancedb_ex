@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve stream error operation labels during cursor opening, batch pulling,
+  and row conversion.
 - Expose `TableCache.connection/2` for shared connection access, including empty
   databases. Share supervised setup with fetch/warming requests and bound waiting
   callers through existing request limits without consuming table capacity.

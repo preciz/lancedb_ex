@@ -327,7 +327,8 @@ defmodule LanceDB.RankingTest do
         reranker: fn _, _ -> :bad end
       )
 
-    assert_raise LanceDB.Error, fn -> Enum.to_list(failing) end
+    error = assert_raise LanceDB.Error, fn -> Enum.to_list(failing) end
+    assert error.operation == :stream_open
   end
 
   test("query deadlines cancel callbacks", %{table: table}) do

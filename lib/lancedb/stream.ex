@@ -13,10 +13,10 @@ defmodule LanceDB.Stream do
     Stream.resource(
       fn ->
         context = Map.put_new(parent, :execution_id, make_ref())
-        {unwrap!(Executor.open(table, plan, batch_size, context)), context}
+        {unwrap!(Executor.open(table, plan, batch_size, context), :stream_open), context}
       end,
       fn {cursor, context} = state ->
-        case unwrap!(Executor.next_batch(cursor, context)) do
+        case unwrap!(Executor.next_batch(cursor, context), :stream_next_batch) do
           nil -> {:halt, state}
           batch -> {items(batch, mode), state}
         end
@@ -28,8 +28,13 @@ defmodule LanceDB.Stream do
   defp items(batch, :batches), do: [batch]
 
   defp items(batch, :rows),
-    do: batch |> LanceDB.Backend.batch_rows() |> unwrap!() |> LanceDB.Result.rows!()
+    do: batch |> LanceDB.Backend.batch_rows() |> unwrap!(:batch_rows) |> LanceDB.Result.rows!()
 
-  defp unwrap!({:ok, value}), do: value
-  defp unwrap!({:error, error}), do: raise(LanceDB.Error.normalize(error, :stream_next_batch))
+  defp unwrap!({:ok, value}, _operation), do: value
+
+  defp unwrap!({:error, %LanceDB.Error{operation: operation} = error}, _fallback)
+       when not is_nil(operation),
+       do: raise(error)
+
+  defp unwrap!({:error, error}, operation), do: raise(LanceDB.Error.normalize(error, operation))
 end
