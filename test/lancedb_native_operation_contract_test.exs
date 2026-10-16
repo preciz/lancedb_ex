@@ -57,6 +57,7 @@ defmodule LanceDB.NativeOperationContractTest do
       delete_branch: &Branch.delete(&1, "scratch"),
       update_schema_metadata: &Metadata.update_schema(&1, %{owner: "test"}),
       update_field_metadata: &Metadata.update_field(&1, :id, %{unit: "test"}),
+      set_unenforced_primary_key: &Table.set_unenforced_primary_key(&1, :id),
       restore: &History.restore(&1, version)
     ]
 

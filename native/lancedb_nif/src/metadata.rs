@@ -4,6 +4,28 @@ use rustler::{Atom, Env, ResourceArc, Term};
 use std::collections::HashMap;
 
 #[rustler::nif]
+fn set_unenforced_primary_key(
+    env: Env<'_>,
+    table: ResourceArc<TableResource>,
+    column: String,
+    reference: Term<'_>,
+) -> Result<Atom, Failure> {
+    crate::request::write(env, reference, move |permit| async move {
+        let _permit = permit;
+        table.ensure_mutable()?;
+        table
+            .table
+            .set_unenforced_primary_key([column])
+            .await
+            // The SDK can wrap commit-time failures as InvalidInput too, so
+            // its error category alone cannot prove a write never started.
+            .map_err(Failure::write_error)?;
+        // Do not follow the commit with a racy version read: the SDK returns ().
+        Ok(crate::wire::Version(None::<u64>))
+    })
+}
+
+#[rustler::nif]
 fn schema_metadata(
     env: Env<'_>,
     table: ResourceArc<TableResource>,

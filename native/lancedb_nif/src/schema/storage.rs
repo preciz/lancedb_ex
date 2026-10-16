@@ -87,10 +87,18 @@ fn owned_metadata(key: &str) -> bool {
     matches!(
         key,
         "ARROW:extension:name" | "ARROW:extension:metadata" | "lance-encoding:blob"
+    ) || primary_key_metadata(key)
+}
+
+fn primary_key_metadata(key: &str) -> bool {
+    matches!(
+        key,
+        lance_core::datatypes::LANCE_UNENFORCED_PRIMARY_KEY
+            | lance_core::datatypes::LANCE_UNENFORCED_PRIMARY_KEY_POSITION
     )
 }
 
-/// Replacement changes user metadata and keeps extension markers.
+/// Replacement changes user metadata and keeps engine-owned markers.
 /// Metadata operations cannot change these markers, including on ordinary fields.
 pub(crate) fn prepare_metadata(
     schema: &arrow_schema::Schema,
@@ -107,12 +115,20 @@ pub(crate) fn prepare_metadata(
             return Err(Failure::new(
                 "unsupported",
                 format!(
-                    "Type-defining metadata '{key}' cannot be changed through a metadata update"
+                    "Engine-owned metadata '{key}' cannot be changed through a metadata update"
                 ),
             ));
         }
     }
-    if replace {
+    // Lance rejects even identical writes to an installed primary-key marker.
+    metadata.retain(|key, _| !primary_key_metadata(key));
+    let preserve_primary_key = replace && field.is_unenforced_primary_key();
+    if preserve_primary_key {
+        // Express replacement as a delta, leaving the immutable marker untouched.
+        for key in field.metadata.keys().filter(|key| !owned_metadata(key)) {
+            metadata.entry(key.clone()).or_insert(None);
+        }
+    } else if replace {
         for (key, value) in &field.metadata {
             if owned_metadata(key) {
                 metadata.insert(key.clone(), Some(value.clone()));
@@ -122,6 +138,6 @@ pub(crate) fn prepare_metadata(
     Ok(lancedb::table::FieldMetadataUpdate {
         path,
         metadata,
-        replace,
+        replace: replace && !preserve_primary_key,
     })
 }

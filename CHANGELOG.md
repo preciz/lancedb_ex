@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `Table.set_unenforced_primary_key/2` for persisted single-column key
+  declarations, using SDK type, nullability, immutability and concurrent-commit
+  checks. Preserve installed key markers when replacing user field metadata.
 - Add explicit `:bloom_filter` scalar indexes for equality, membership, and null
   filters, with per-filter row counts, false-positive targets, and the existing
   synchronous, asynchronous, and maintenance APIs.

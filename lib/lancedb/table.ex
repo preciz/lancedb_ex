@@ -116,6 +116,34 @@ defmodule LanceDB.Table do
   end
 
   @doc """
+  Records one existing column as the table's unenforced primary key.
+
+  Accepts a string or atom field path. The supported types are `:int32`,
+  `:int64`, `:string`, `:large_string`, `:binary`, `:large_binary`, and
+  `{:fixed_size_binary, width}`. The field and any struct ancestors must be
+  non-nullable. Use `LanceDB.SchemaEvolution.alter_columns/2` to tighten
+  nullability first; that operation checks existing rows for nulls.
+
+  The SDK persists the designation without checking uniqueness or creating an
+  index. Callers must maintain unique keys. Only one column is supported;
+  setting it again, including the same column, returns an error. Snapshots
+  reject this mutation. Field metadata is available through `schema/1`.
+
+  Returns a `LanceDB.WriteResult` with `version: nil` and unavailable counts:
+  the SDK confirms the commit but does not return its version. Merge and upsert
+  keep their `:on` option and default `:id`; use `on: column` for another key.
+  """
+  @spec set_unenforced_primary_key(table(), String.t() | atom()) ::
+          result(LanceDB.WriteResult.t())
+  def set_unenforced_primary_key(table, column) do
+    LanceDB.Execution.write(
+      :set_unenforced_primary_key,
+      fn -> Backend.set_unenforced_primary_key(table, LanceDB.Options.column_name!(column)) end,
+      &LanceDB.WriteResult.version/2
+    )
+  end
+
+  @doc """
   Inserts new records and replaces matching rows in one merge operation.
 
   The `:on` option accepts a column name or a non-empty list of column names

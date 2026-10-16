@@ -32,6 +32,53 @@ versions, and files without recorded sizes. The value describes recorded
 storage for the current table. It is not a complete measurement of
 filesystem or bucket usage.
 
+## Unenforced primary keys
+
+Record one existing column as the table's primary key:
+
+```elixir
+{:ok, keyed} = LanceDB.Connection.create_empty_table(db, "keyed", [
+  %{name: :document_id, type: :string, nullable: false},
+  {:text, :string}
+])
+
+{:ok, %LanceDB.WriteResult{operation: :set_unenforced_primary_key, version: nil}} =
+  LanceDB.Table.set_unenforced_primary_key(keyed, :document_id)
+
+{:ok, schema} = LanceDB.Table.schema(keyed)
+# The key field's metadata contains "lance-schema:unenforced-primary-key:position" => "1".
+
+{:ok, %{inserted: 1}} =
+  LanceDB.Table.upsert(keyed, [%{document_id: "doc-1", text: "hello"}], on: :document_id)
+```
+
+This designation persists through reopening and is visible in versioned schema
+metadata. Setting it creates a commit, but the SDK does not return the commit
+version, so the write result's version and counts are `nil`. `History.version/1`
+can read the handle's visible version afterward; concurrent writes can advance it.
+
+The supported key types are `:int32`, `:int64`, `:string`, `:large_string`,
+`:binary`, `:large_binary`, and `{:fixed_size_binary, width}`. Only one key
+column is supported. The key field and its struct ancestors must be
+non-nullable; fields inside lists or maps cannot be keys. Nested field paths
+use Lance path syntax, including backticks for literal dots.
+
+Fields are nullable by default. For an existing table, first use
+`SchemaEvolution.alter_columns(table, document_id: [nullable: false])`.
+That operation checks existing rows for nulls and fails if any remain.
+The setter does not change nullability automatically.
+
+LanceDB does **not** check uniqueness when setting the key or writing rows.
+Existing and future duplicate values are allowed. Maintain unique keys in your
+application. Setting a key does not build an index or change merge join keys:
+`upsert/3` and `merge/3` still default to `:id`; pass `on: :document_id` for
+another column. Their incoming-key validation still accepts strings or integers.
+
+The setter rejects a second declaration, including the same column. SDK commit
+checks also prevent stale handles from overwriting a concurrently installed key.
+Snapshots reject the mutation. User field-metadata replacements preserve the
+key marker; attempts to change it through `Metadata.update_field/4` fail.
+
 ## Version history and restore
 
 Inspect kept versions and read an older snapshot:

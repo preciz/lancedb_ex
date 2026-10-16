@@ -204,6 +204,10 @@ existing keys are unique.
 Upsert does not add a uniqueness constraint. It does not remove existing
 duplicate keys.
 
+An [unenforced primary-key declaration](tables.md#unenforced-primary-keys)
+persists key metadata without changing these join-key rules. Pass `:on` explicitly
+when the declared column differs from the default `:id`.
+
 Use `update/3` for partial changes:
 
 ```elixir

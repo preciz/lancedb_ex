@@ -573,9 +573,11 @@ Metadata maps accept string or atom keys and UTF-8 string values. Updates
 merge by default. Use `nil` to delete a key. Use `replace: true` to replace
 schema metadata or user field metadata. An empty replacement clears that
 metadata. Field replacement keeps extension markers that identify the
-field's logical type.
+field's logical type and preserves an installed unenforced primary-key marker.
 
-An attempt to change these markers returns an unsupported error.
+An attempt to change these markers returns an unsupported error. Use
+[`Table.set_unenforced_primary_key/2`](tables.md#unenforced-primary-keys) to
+designate a primary key.
 
 Updates create versions. Historical handles reject updates. Branches and
 shallow clones keep their metadata. `Table.schema/1` returns a

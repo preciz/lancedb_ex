@@ -237,6 +237,10 @@ defmodule LanceDB.Backend do
   @spec schema_metadata(Table.t()) :: result(String.t())
   def schema_metadata(table), do: call(:schema_metadata, [table])
 
+  @spec set_unenforced_primary_key(Table.t(), String.t()) :: result(Native.version_output())
+  def set_unenforced_primary_key(table, column),
+    do: call(:set_unenforced_primary_key, [table, column])
+
   @spec update_schema_metadata(Table.t(), %{String.t() => String.t() | nil}, boolean()) ::
           result(Native.version_output())
   def update_schema_metadata(table, changes, replace),

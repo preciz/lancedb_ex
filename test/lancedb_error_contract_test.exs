@@ -25,6 +25,14 @@ defmodule LanceDB.ErrorContractTest do
 
   def event(event, _measurements, metadata, pid), do: send(pid, {event, metadata})
 
+  test "primary key arguments raise within their operation span", %{table: table} do
+    for column <- [nil, 123, "", " \n", <<255>>, [], [:id], [:id, :other]] do
+      assert_argument_error(:set_unenforced_primary_key, fn ->
+        LanceDB.Table.set_unenforced_primary_key(table, column)
+      end)
+    end
+  end
+
   test "connection argument failures raise inside their operation spans", %{conn: conn} do
     for value <- [nil, 123, "", " \n", <<255>>] do
       assert_argument_error(:connect, fn -> Connection.connect(value) end)

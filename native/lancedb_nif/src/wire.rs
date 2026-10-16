@@ -5,16 +5,16 @@ use rustler::{Encoder, Env, ResourceArc, Term};
 rustler::atoms! { write, version, table, execution, invalid_data, not_found, already_exists, conflict, timeout, unsupported, storage, cancelled, busy }
 
 pub(crate) struct Counts<T>(pub T);
-pub(crate) struct Version(pub u64);
+pub(crate) struct Version<T = u64>(pub T);
 
 impl<T: Encoder> Encoder for Counts<T> {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
         (write(), &self.0).encode(env)
     }
 }
-impl Encoder for Version {
+impl<T: Encoder> Encoder for Version<T> {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        (version(), self.0).encode(env)
+        (version(), &self.0).encode(env)
     }
 }
 impl Encoder for WriteOutput {

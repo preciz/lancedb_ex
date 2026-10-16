@@ -3,7 +3,7 @@ defmodule LanceDB.Native do
   @type error :: %{kind: atom(), message: String.t(), details: map()}
   @type result(value) :: {:ok, value} | {:error, error()}
   @type counts_output :: {:write, %{atom() => non_neg_integer() | nil}}
-  @type version_output :: {:version, pos_integer()}
+  @type version_output :: {:version, pos_integer() | nil}
   @type write_output :: counts_output() | version_output() | {:table, reference()}
   @type query_operation :: :explain | :explain_verbose | :analyze | :schema
 
@@ -607,6 +607,14 @@ defmodule LanceDB.Native do
 
   @spec schema_metadata(reference(), reference()) :: result(:ok)
   def schema_metadata(_table, _reference), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec set_unenforced_primary_key(reference(), String.t()) :: result(version_output())
+  def set_unenforced_primary_key(table, column),
+    do: async_call(:set_unenforced_primary_key, [table, column])
+
+  @spec set_unenforced_primary_key(reference(), String.t(), reference()) :: result(:ok)
+  def set_unenforced_primary_key(_table, _column, _reference),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   @spec update_schema_metadata(reference(), %{String.t() => String.t() | nil}, boolean()) ::
           result(version_output())
