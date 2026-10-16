@@ -1,16 +1,19 @@
 use crate::error::Failure;
-use lancedb::query::{QueryBase, VectorQuery};
+use lancedb::query::{HasQuery, QueryBase, VectorQuery};
 
 #[derive(Clone, Copy, serde::Deserialize)]
 pub(crate) struct ReadControls {
     pub(crate) offset: usize,
     pub(crate) with_row_id: bool,
+    #[serde(default)]
+    pub(crate) disable_scoring_autoprojection: bool,
     pub(crate) prefilter: bool,
     fast_search: bool,
 }
 
 impl ReadControls {
-    pub(crate) fn apply<Q: QueryBase>(self, mut query: Q) -> Q {
+    pub(crate) fn apply<Q: HasQuery>(self, mut query: Q) -> Q {
+        query.mut_query().disable_scoring_autoprojection = self.disable_scoring_autoprojection;
         query = query.offset(self.offset);
         if self.with_row_id {
             query = query.with_row_id();

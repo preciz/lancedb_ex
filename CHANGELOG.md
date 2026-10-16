@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the boolean `:disable_scoring_autoprojection` query option to omit automatic
+  distance, full-text, and hybrid relevance scores while preserving explicitly
+  selected scores, internal reranker inputs, row IDs, and batch query indexes.
 - Add `Table.set_unenforced_primary_key/2` for persisted single-column key
   declarations, using SDK type, nullability, immutability and concurrent-commit
   checks. Preserve installed key markers when replacing user field metadata.

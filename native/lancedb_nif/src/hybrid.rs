@@ -117,6 +117,13 @@ impl HybridResultPlan {
             .iter()
             .enumerate()
             .filter(|(_, field)| self.read.with_row_id || field.name() != "_rowid")
+            .filter(|(_, field)| {
+                // Explicit projections already encode the caller's score choice.
+                // With no projection, omit only the automatically added score.
+                !self.read.disable_scoring_autoprojection
+                    || self.projection.is_some()
+                    || field.name() != "_relevance_score"
+            })
             .map(|(i, _)| i)
             .collect();
         project(
@@ -227,8 +234,13 @@ pub(crate) async fn hybrid_plan(
         )
     };
     let row_id = if read.with_row_id { "retain" } else { "remove" };
+    let scoring = if read.disable_scoring_autoprojection {
+        "include _relevance_score only when projected"
+    } else {
+        "add _relevance_score"
+    };
     Ok(format!(
-        "Vector channel:\n{vector}\nFull-text channel:\n{text}\nFusion: {fusion}\nReranker: {ranking}, normalization={}\nFinal ordering: {:?}\nPagination: offset={}, candidate_limit={}\nOutput: align channel columns, add _relevance_score, {row_id} _rowid\n",
+        "Vector channel:\n{vector}\nFull-text channel:\n{text}\nFusion: {fusion}\nReranker: {ranking}, normalization={}\nFinal ordering: {:?}\nPagination: offset={}, candidate_limit={}\nOutput: align channel columns, {scoring}, {row_id} _rowid\n",
         hybrid.normalize, result.order_by, read.offset, limit + read.offset
     ))
 }

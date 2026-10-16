@@ -59,7 +59,19 @@ defmodule LanceDB.Query do
   def row_offsets(%__MODULE__{} = query, offsets),
     do: select_source(query, {:take, :row_offsets, offsets})
 
-  @doc "Merges options, validating them against the selected query kind."
+  @doc """
+  Merges options, validating them against the selected query kind.
+
+  `:disable_scoring_autoprojection` is a boolean, defaulting to `false`.
+  Set it to `true` to omit automatic `_distance`, `_score`, and hybrid
+  `_relevance_score` fields. Explicitly selected score columns remain visible;
+  standalone vector and text queries also accept score expressions through
+  `select_as/2`. Hybrid expressions use stored columns in both channels.
+
+  Scores remain available internally for ranking and custom hybrid rerankers.
+  `:with_row_id` and batch `query_index` are independent of this option.
+  It applies to collected rows, streams, Arrow batches, and `schema/1`.
+  """
   @spec options(t(), keyword()) :: t()
   def options(%__MODULE__{} = query, opts),
     do: %{query | definition: Definition.update(query.definition, opts)}

@@ -53,6 +53,13 @@ impl ResultPolicy {
         }
     }
 
+    pub(crate) fn scoring_autoprojection(mut self, enabled: bool) -> Self {
+        if !enabled {
+            self.score = None;
+        }
+        self
+    }
+
     fn metadata(self) -> Vec<&'static str> {
         let mut metadata: Vec<_> = self.score.into_iter().collect();
         if self.with_row_id {

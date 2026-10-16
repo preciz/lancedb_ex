@@ -124,7 +124,8 @@ async fn prepare_text(
         .projection
         .prepare(
             table,
-            ResultPolicy::text(options.read.with_row_id),
+            ResultPolicy::text(options.read.with_row_id)
+                .scoring_autoprojection(!options.read.disable_scoring_autoprojection),
             &options.order_by,
         )
         .await?;
@@ -158,6 +159,9 @@ async fn prepare_vector(
     let mut read = options.read;
     let candidate_limit = if controls.hybrid.is_some() {
         read.offset = 0;
+        // Channel scores are still needed for fusion and callback normalization.
+        // The caller's scoring policy applies to the final hybrid result only.
+        read.disable_scoring_autoprojection = false;
         limit + options.read.offset
     } else {
         limit
@@ -166,7 +170,8 @@ async fn prepare_vector(
     if let Some(column) = &controls.vector_column {
         query = query.column(column);
     }
-    let policy = ResultPolicy::vector(options.read.with_row_id, controls.hybrid.is_some());
+    let policy = ResultPolicy::vector(options.read.with_row_id, controls.hybrid.is_some())
+        .scoring_autoprojection(!options.read.disable_scoring_autoprojection);
     let mut projection = options
         .projection
         .prepare(table, policy, &options.order_by)

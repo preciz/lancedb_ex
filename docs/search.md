@@ -21,7 +21,7 @@ Create a full-text index on a string column, then search for words:
   )
 ```
 
-Results include selected fields and `"_score"`, a BM25 relevance score.
+Results include selected fields and, by default, `"_score"`, a BM25 relevance score.
 Higher scores rank first. If no rows match, the result is `{:ok, []}`.
 `:text_column` accepts a string or atom. Omit it to use the SDK's indexed
 column selection. Set it explicitly when the table has multiple searchable
@@ -76,7 +76,7 @@ Each channel fetches up to `limit + offset` candidates. After fusion, the
 query skips the requested offset and returns at most `limit` results. Fusion
 cannot find candidates outside those lists.
 
-Results include selected data fields and `"_relevance_score"`. Higher
+Results include selected data fields and, by default, `"_relevance_score"`. Higher
 scores rank first. Results do not include individual channel scores.
 `with_row_id: true` keeps internal row IDs. Without that option, results do
 not include row IDs. The fused score combines ranks from both channels.
@@ -84,6 +84,13 @@ not include row IDs. The fused score combines ranks from both channels.
 RRF scores indicate rank. They are not probabilities. Invalid options raise
 `ArgumentError`. Native search failures return `{:error,
 reason}`.
+
+Set `disable_scoring_autoprojection: true` to omit the automatic score from
+the final result, or explicitly name it in `:columns` to keep it. This applies
+to both full-text and hybrid queries, including custom rerankers. Internal
+channel scores remain available to rerankers. See
+[automatic scoring columns](queries.md#automatic-scoring-columns) for
+projection, streaming, and schema behavior.
 
 ## Reusable text and hybrid queries
 

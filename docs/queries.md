@@ -217,14 +217,60 @@ use **stored columns**, even when an output alias uses a stored column's
 name. Quote SQL identifiers with backticks when their names contain
 punctuation.
 
-Search results keep `_distance`, `_score`, or `_relevance_score`. They
-also include `_rowid` when requested. Computed aliases cannot use these
+Search results include `_distance`, `_score`, or `_relevance_score` by default.
+They also include `_rowid` when requested. Computed aliases cannot use these
 metadata names. Hybrid expressions execute in both search channels. Use
-stored columns in these expressions. Do not use channel scores or the
-relevance score from fusion.
+stored columns in hybrid expressions. Channel scores and the relevance score
+from fusion are not available to those expressions.
 
 Timestamp and null encoding stay unchanged. Plans can show private aliases
 and hidden physical columns. Returned rows exclude those fields.
+
+### Automatic scoring columns
+
+Use `disable_scoring_autoprojection: true` to omit automatic scoring fields
+from search results. The default is `false`, preserving the current result
+shape. Set the option on a reusable query or any immediate query helper:
+
+```elixir
+query =
+  table
+  |> LanceDB.Query.new(disable_scoring_autoprojection: true)
+  |> LanceDB.Query.nearest_to([0.9, 0.1, 0.2])
+  |> LanceDB.Query.select([:id, :text])
+
+{:ok, rows} = LanceDB.Query.all(query)
+# Each row contains only "id" and "text".
+
+# Explicitly selecting a score keeps it in the output:
+{:ok, scored} = query |> LanceDB.Query.select([:id, :_distance]) |> LanceDB.Query.all()
+
+{:ok, matches} = LanceDB.Query.full_text_search(table, "elixir",
+  columns: [:id, :text], disable_scoring_autoprojection: true
+)
+```
+
+This controls `_distance` for vector, batch, and multivector searches,
+`_score` for full-text searches, and `_relevance_score` for hybrid searches.
+Without an explicit projection, it returns stored columns and omits the
+automatic score. With `:columns`, only an explicitly named score is returned.
+Standalone vector and full-text queries can reference their score in a
+`:select` expression, such as `select: [distance: "_distance"]` or
+`select: [rank: "_score + 1"]`; the alias remains in the output.
+Hybrid scores can be selected through `:columns`, rather than expressions
+that execute before fusion.
+
+Ranking and pagination keep their existing behavior. Custom rerankers continue to receive
+channel scores and row IDs; this option controls only the final result.
+It does not change `:with_row_id` or the `query_index` discriminator in batch
+searches. Scans and direct retrieval accept it without changing their results.
+The value must be a boolean; explicit `nil` is invalid.
+
+Collected rows, row streams, Arrow batch streams, and `Query.schema/1` use
+the same projection. Set the option on the query itself before streaming;
+stream options still contain only `:batch_size`.
+
+### Direct retrieval
 
 Fetch complete records after a search that returns selected fields:
 

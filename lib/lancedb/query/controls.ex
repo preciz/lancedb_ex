@@ -1,7 +1,7 @@
 defmodule LanceDB.Query.Controls do
   @moduledoc false
   alias LanceDB.{Options, Projection, SearchControls}
-  @common [:columns, :select, :timeout_ms, :with_row_id]
+  @common [:columns, :select, :timeout_ms, :with_row_id, :disable_scoring_autoprojection]
   @read [:filter, :limit, :offset, :order_by, :fast_search] ++ @common
   @vector [
             :distance,
@@ -144,7 +144,13 @@ defmodule LanceDB.Query.Controls do
   end
 
   defp value!(key, value)
-       when key in [:with_row_id, :fast_search, :prefilter, :bypass_vector_index] do
+       when key in [
+              :with_row_id,
+              :fast_search,
+              :prefilter,
+              :bypass_vector_index,
+              :disable_scoring_autoprojection
+            ] do
     if not is_boolean(value), do: raise(ArgumentError, "#{key} must be a boolean")
     value
   end

@@ -17,7 +17,8 @@ defmodule LanceDB.Query.Request do
         offset: Map.get(c, :offset, 0),
         prefilter: Map.get(c, :prefilter, true),
         fast_search: Map.get(c, :fast_search, false),
-        with_row_id: Map.get(c, :with_row_id, false)
+        with_row_id: Map.get(c, :with_row_id, false),
+        disable_scoring_autoprojection: Map.get(c, :disable_scoring_autoprojection, false)
       },
       execution: %{timeout_ms: c[:timeout_ms]},
       order_by:

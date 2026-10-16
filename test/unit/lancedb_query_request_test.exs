@@ -10,6 +10,7 @@ defmodule LanceDB.QueryRequestTest do
     assert Request.compile(scan.definition).request.limit == 100
     assert Request.compile(vector.definition).request.limit == 10
     assert scan.definition.controls == %{}
+    refute Request.compile(scan.definition).request.read.disable_scoring_autoprojection
     assert Query.limit(scan, nil).definition.controls == %{limit: nil}
 
     assert Query.limit(scan, 7)
@@ -46,6 +47,7 @@ defmodule LanceDB.QueryRequestTest do
         map(one_of([constant(nil), integer(1..1000)]), &{:limit, &1}),
         map(integer(0..1000), &{:offset, &1}),
         map(boolean(), &{:with_row_id, &1}),
+        map(boolean(), &{:disable_scoring_autoprojection, &1}),
         map(one_of([constant(nil), member_of([[:id], [:text], [:id, :text]])]), &{:columns, &1})
       ])
 
@@ -65,6 +67,10 @@ defmodule LanceDB.QueryRequestTest do
         assert request.limit == Map.get(next_model, :limit, 100)
         assert request.read.offset == Map.get(next_model, :offset, 0)
         assert request.read.with_row_id == Map.get(next_model, :with_row_id, false)
+
+        assert request.read.disable_scoring_autoprojection ==
+                 Map.get(next_model, :disable_scoring_autoprojection, false)
+
         assert request.projection.columns == next_model[:columns]
         {query, next_model}
       end)
@@ -131,5 +137,35 @@ defmodule LanceDB.QueryRequestTest do
     assert plan.request.controls.hybrid.custom
     refute Map.has_key?(plan.request, :reranker)
     assert is_binary(JSON.encode!(plan.request))
+  end
+
+  test "scoring projection is a shared boolean control retained across source changes" do
+    base = Query.new(%Table{resource: make_ref()}, disable_scoring_autoprojection: true)
+
+    for query <- [
+          base,
+          Query.nearest_to(base, [1, 0]),
+          Query.text(base, "term"),
+          Query.hybrid(base, [1, 0], "term"),
+          Query.nearest_to_many(base, [[1, 0]]),
+          Query.multivector(base, [[1, 0]]),
+          Query.row_ids(base, [0]),
+          Query.row_offsets(base, [0])
+        ] do
+      assert Request.compile(query.definition).request.read.disable_scoring_autoprojection
+
+      refute query
+             |> Query.options(disable_scoring_autoprojection: false)
+             |> Map.fetch!(:definition)
+             |> Request.compile()
+             |> Map.fetch!(:request)
+             |> get_in([:read, :disable_scoring_autoprojection])
+    end
+
+    for value <- [nil, 0, 1, "true", :keep, []] do
+      assert_raise ArgumentError, ~r/disable_scoring_autoprojection must be a boolean/, fn ->
+        Query.options(base, disable_scoring_autoprojection: value)
+      end
+    end
   end
 end
