@@ -158,7 +158,7 @@ schema:
 - Define an explicit schema for lists and nested maps. Schema inference does not
 infer them.
 
-Appends and upserts validate records against the stored schema, as described
+Appends and upserts validate records against the stored writable fields, as described
 above. Without `:vector_column`, search selects the unique column compatible
 with the search mode and query dimension. Multiple matches require an explicit
 column; dimension mismatches report the query and expected dimensions.

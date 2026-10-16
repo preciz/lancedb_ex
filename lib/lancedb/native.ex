@@ -185,7 +185,7 @@ defmodule LanceDB.Native do
   @spec job_status(reference(), reference()) :: result(:ok)
   def job_status(_job, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec job_wait(reference(), non_neg_integer() | nil) :: result(:created)
+  @spec job_wait(reference(), non_neg_integer() | nil) :: result(:created | {:refresh, map()})
   def job_wait(job, timeout), do: async_call(:job_wait, [job, timeout])
 
   @spec job_wait(reference(), non_neg_integer() | nil, reference()) :: result(:ok)
@@ -437,6 +437,26 @@ defmodule LanceDB.Native do
 
   @spec add_columns(reference(), [{String.t(), String.t()}], reference()) :: result(:ok)
   def add_columns(_table, _expressions, _reference), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec add_computed_columns(reference(), [{String.t(), String.t()}]) :: result(version_output())
+  def add_computed_columns(table, expressions),
+    do: async_call(:add_computed_columns, [table, expressions])
+
+  @spec add_computed_columns(reference(), [{String.t(), String.t()}], reference()) :: result(:ok)
+  def add_computed_columns(_table, _expressions, _reference),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec refresh_column(reference(), String.t()) :: result({:refresh, map()})
+  def refresh_column(table, column), do: async_call(:refresh_column, [table, column])
+
+  @spec refresh_column(reference(), String.t(), reference()) :: result(:ok)
+  def refresh_column(_table, _column, _reference), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec refresh_column_async(reference(), String.t()) :: result(reference())
+  def refresh_column_async(table, column), do: async_call(:refresh_column_async, [table, column])
+
+  @spec refresh_column_async(reference(), String.t(), reference()) :: result(:ok)
+  def refresh_column_async(_table, _column, _reference), do: :erlang.nif_error(:nif_not_loaded)
 
   @spec alter_columns(reference(), String.t()) :: result(version_output())
   def alter_columns(table, changes), do: async_call(:alter_columns, [table, changes])

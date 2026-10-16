@@ -1,8 +1,8 @@
 defmodule LanceDB.Job do
   @moduledoc """
-  A shareable native index job. Jobs continue if the caller exits or the handle
+  A shareable native index or computed-column refresh job. Jobs continue if the caller exits or the handle
   is garbage collected. Use cancel/1 explicitly; cancellation is best effort and
-  does not undo a completed index. A job holds a write admission slot until it
+  does not undo completed commits. A job holds a write admission slot until it
   completes. Waiting with a deadline does not cancel the job.
   """
   @enforce_keys [:resource]
@@ -15,13 +15,14 @@ defmodule LanceDB.Job do
     do: LanceDB.Execution.run(:job_status, fn -> LanceDB.Backend.job_status(job) end)
 
   @doc """
-  Waits for completion, returning `{:ok, :created}` or the job's terminal error.
+  Waits for completion, returning `{:ok, :created}` for index jobs,
+  `{:ok, %LanceDB.RefreshResult{}}` for SQL refresh jobs, or the terminal error.
   `:timeout_ms` is nil (wait indefinitely) or a non-negative uint32 millisecond
   count; zero checks without waiting. A timeout bounds this wait and leaves
   the job running. Native waits use Tokio and reply without retaining a BEAM
   scheduler. A completed result is available to subsequent waits.
   """
-  @spec wait(t(), keyword()) :: LanceDB.result(:created)
+  @spec wait(t(), keyword()) :: LanceDB.result(:created | LanceDB.RefreshResult.t())
   def wait(%__MODULE__{} = job, opts \\ []) do
     opts = Keyword.validate!(opts, [:timeout_ms])
     timeout = opts[:timeout_ms]

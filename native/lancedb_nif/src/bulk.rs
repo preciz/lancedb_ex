@@ -85,7 +85,8 @@ async fn merge_stream_open_impl(
     permit: Permit,
 ) -> Result<ResourceArc<WriterResource>, Failure> {
     table.ensure_mutable()?;
-    let schema = table.table.schema().await.map_err(Failure::from_error)?;
+    let schema =
+        crate::computed::write_schema(table.table.schema().await.map_err(Failure::from_error)?);
     for key in &keys {
         let field = schema.field_with_name(key).map_err(Failure::from_error)?;
         if field.data_type() != &arrow_schema::DataType::Utf8 && !field.data_type().is_integer() {
@@ -157,6 +158,18 @@ async fn columns_stream_open_impl(
         .count_rows(None)
         .await
         .map_err(Failure::from_error)?;
+    if schema.fields().iter().any(|field| {
+        field.metadata().keys().any(|key| {
+            key == "computed_column"
+                || key.starts_with("computed_column.")
+                || key.starts_with("computed_refresh.")
+        })
+    }) {
+        return Err(
+            "Column backfills cannot install computed declarations; use add_computed_columns"
+                .into(),
+        );
+    }
     let worker = Writer::spawn_operation(schema.clone(), move |stream, _| async move {
         let _permit = permit;
         let mut stream = checked_columns(stream, expected_rows);

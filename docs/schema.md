@@ -552,6 +552,99 @@ errors return `{:error, reason}`. Reopen other table handles to get the
 latest schema before writing with it. Separate evolution calls produce
 separate commits. They do not form one migration transaction.
 
+## SQL computed columns
+
+`SchemaEvolution.add_columns/2` fills ordinary columns once. Declare a computed
+column when its SQL expression should persist for later refreshes:
+
+```elixir
+{:ok, %LanceDB.WriteResult{version: declaration_version}} =
+  LanceDB.SchemaEvolution.add_computed_columns(table,
+    text_length: "CAST(length(text) AS BIGINT)",
+    upper_text: "upper(text)"
+  )
+
+# Declarations initially contain null placeholders.
+{:ok, %LanceDB.RefreshResult{rows_filled: count, version: version}} =
+  LanceDB.Table.refresh_column(table, :text_length)
+
+{:ok, job} = LanceDB.Table.refresh_column_async(table, :upper_text)
+{:ok, %LanceDB.RefreshResult{rows_filled: count, version: version}} = LanceDB.Job.wait(job)
+```
+
+Declarations accept SQL strings or `LanceDB.Expr` values. The SDK infers types,
+requires deterministic scalar expressions, and records expressions and input
+paths in field metadata visible through `Table.schema/1`. Declaring columns
+does not compute their values. Registered Functions are not exposed.
+
+Refresh explicitly fills missing values and recomputes fragments whose inputs
+changed. Reads and writes do not automatically refresh computed columns.
+New rows have null placeholders. After an input update or merge, existing
+computed values can remain stale until refreshed. Schedule refreshes according
+to the application's freshness requirements.
+
+`rows_filled` is the SDK count of **non-null** results filled or recomputed in
+the requested column, not a count of scanned rows. An expression that evaluates
+to null does not increase it. Freshness is tracked by fragment, so changing an
+input can cause unchanged rows in that fragment to be recomputed too. A refresh
+with zero filled rows may still record tracking metadata. `version` is the last
+version published by the operation, or its exact source version if nothing was
+committed; it is not a subsequent read of the latest table version.
+
+On local and object-storage tables, asynchronous refresh runs in this process.
+It uses the existing job status, cancellation, and deadline APIs, retains write
+admission until completion, and continues after the caller exits. Repeated waits
+return the same result. A wait timeout leaves the job running. Cancellation is
+best effort and does not roll back commits. Index jobs still return `:created`.
+
+### Writable input and dependencies
+
+Append, merge, and upsert input must include every ordinary field and **omit
+computed fields**, including null placeholders. Direct updates to computed
+columns are rejected. For Arrow batches or explicit Source schemas, use:
+
+```elixir
+{:ok, input_schema} = LanceDB.Table.write_schema(table)
+{:ok, batch} = LanceDB.Batch.from_rows(incoming_rows, input_schema)
+{:ok, result} = LanceDB.Table.add(table, LanceDB.Source.batches([batch], schema: input_schema))
+```
+
+`Table.schema/1` retains the full read schema. `write_schema/1` returns the same
+logical schema without computed fields, preserving the remaining field and
+schema metadata. Source schemas are checked against writable fields. Ordinary
+columns added by `add_columns/2` must still be supplied.
+
+Use an ordered list when one declaration depends on an earlier computed column:
+
+```elixir
+{:ok, _} = LanceDB.SchemaEvolution.add_computed_columns(table,
+  doubled: "value * 2", adjusted: "doubled + 1"
+)
+{:ok, _} = LanceDB.Table.refresh_column(table, :doubled)
+{:ok, _} = LanceDB.Table.refresh_column(table, :adjusted)
+```
+
+Refresh upstream columns first, including after input changes. Inputs and their
+ancestors cannot be renamed, retyped, or dropped while dependent declarations
+exist. Drop dependents first, or drop a dependency group together, to change
+definitions. Computed columns cannot be retyped in place. SDK dependency checks
+apply to nested input paths too.
+
+Snapshots retain historical declarations and values and reject declaration or
+refresh mutations. Branches have independent refresh state. Failed refreshes
+return structured errors; they do not promise rollback of already published work.
+
+The pinned SDK replaces the input schema on overwrite. To preserve declarations,
+`Table.add/3` rejects `mode: :overwrite` on computed-column tables before input
+is consumed. Use append, update, or merge for these tables.
+
+User metadata on a top-level computed column can be merged or replaced without
+rewriting its declaration or freshness signatures. Reserved declaration and
+refresh keys cannot be changed through `Metadata.update_field/4` or installed
+through a column backfill. Nested metadata edits on computed containers and their
+inputs are rejected because the pinned SDK can no longer align their types when
+refreshing. Edit top-level user metadata instead.
+
 ## Schema and field metadata
 
 Attach metadata at creation, independently of row values:
@@ -573,7 +666,8 @@ Metadata maps accept string or atom keys and UTF-8 string values. Updates
 merge by default. Use `nil` to delete a key. Use `replace: true` to replace
 schema metadata or user field metadata. An empty replacement clears that
 metadata. Field replacement keeps extension markers that identify the
-field's logical type and preserves an installed unenforced primary-key marker.
+field's logical type and preserves installed primary-key and computed-column
+declarations, including refresh tracking metadata.
 
 An attempt to change these markers returns an unsupported error. Use
 [`Table.set_unenforced_primary_key/2`](tables.md#unenforced-primary-keys) to

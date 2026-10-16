@@ -7,21 +7,28 @@ defmodule LanceDB.Operations.SchemaEvolution do
   @spec add_columns(LanceDB.Table.t(), map() | list()) ::
           LanceDB.Native.result(LanceDB.Native.version_output())
   def add_columns(table, expressions) do
+    Backend.add_columns(table, column_expressions!(expressions))
+  end
+
+  @spec add_computed_columns(LanceDB.Table.t(), map() | list()) ::
+          LanceDB.Native.result(LanceDB.Native.version_output())
+  def add_computed_columns(table, expressions) do
+    Backend.add_computed_columns(table, column_expressions!(expressions))
+  end
+
+  defp column_expressions!(expressions) do
     expressions = evolution_pairs!(expressions)
 
-    expressions =
-      Enum.map(expressions, fn {name, expression} ->
-        name = evolution_name!(name)
-        expression = Options.filter!(expression)
+    Enum.map(expressions, fn {name, expression} ->
+      name = evolution_name!(name)
+      expression = Options.filter!(expression)
 
-        if !(is_binary(expression) and String.valid?(expression) and
-               String.trim(expression) != ""),
-           do: raise(ArgumentError, "column expressions must be non-empty SQL strings")
+      if !(is_binary(expression) and String.valid?(expression) and
+             String.trim(expression) != ""),
+         do: raise(ArgumentError, "column expressions must be non-empty SQL strings")
 
-        {name, expression}
-      end)
-
-    Backend.add_columns(table, expressions)
+      {name, expression}
+    end)
   end
 
   @spec alter_columns(LanceDB.Table.t(), map() | list()) ::

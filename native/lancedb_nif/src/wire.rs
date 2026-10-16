@@ -2,10 +2,17 @@
 use crate::{outcome::WriteOutput, resources::TableResource};
 use rustler::{Encoder, Env, ResourceArc, Term};
 
-rustler::atoms! { write, version, table, execution, invalid_data, not_found, already_exists, conflict, timeout, unsupported, storage, cancelled, busy }
+rustler::atoms! { write, version, refresh, table, execution, invalid_data, not_found, already_exists, conflict, timeout, unsupported, storage, cancelled, busy }
 
 pub(crate) struct Counts<T>(pub T);
 pub(crate) struct Version<T = u64>(pub T);
+pub(crate) struct Refresh(pub crate::computed::RefreshResult);
+
+impl Encoder for Refresh {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        (refresh(), &self.0).encode(env)
+    }
+}
 
 impl<T: Encoder> Encoder for Counts<T> {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {

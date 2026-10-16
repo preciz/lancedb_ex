@@ -58,6 +58,9 @@ defmodule LanceDB.NativeOperationContractTest do
       update_schema_metadata: &Metadata.update_schema(&1, %{owner: "test"}),
       update_field_metadata: &Metadata.update_field(&1, :id, %{unit: "test"}),
       set_unenforced_primary_key: &Table.set_unenforced_primary_key(&1, :id),
+      add_computed_columns: &SchemaEvolution.add_computed_columns(&1, doubled: "id * 2"),
+      refresh_column: &Table.refresh_column(&1, :id),
+      refresh_column_async: &Table.refresh_column_async(&1, :id),
       restore: &History.restore(&1, version)
     ]
 
@@ -147,6 +150,40 @@ defmodule LanceDB.NativeOperationContractTest do
              Job.wait(job)
 
     assert {:error, ^error} = Job.wait(job)
+  end
+
+  test "refresh jobs survive caller exit and release admission after success or failure", %{
+    table: table
+  } do
+    assert {:ok, _} =
+             SchemaEvolution.add_computed_columns(table,
+               length: "CAST(length(text) AS BIGINT)",
+               bad: "CAST(text AS BIGINT)"
+             )
+
+    assert {:ok, :ok} = Execution.configure(writes: 1)
+    on_exit(fn -> Execution.configure([]) end)
+    parent = self()
+
+    for column <- [:length, :bad] do
+      {owner, monitor} =
+        spawn_monitor(fn ->
+          {:ok, job} = Table.refresh_column_async(table, column)
+          send(parent, {:refresh_job, job})
+        end)
+
+      assert_receive {:refresh_job, job}, 5_000
+      assert_receive {:DOWN, ^monitor, :process, ^owner, :normal}, 5_000
+      result = Job.wait(job)
+
+      case column do
+        :length -> assert {:ok, %LanceDB.RefreshResult{rows_filled: 1}} = result
+        :bad -> assert {:error, %Error{}} = result
+      end
+
+      assert ^result = Job.wait(job, timeout_ms: 0)
+      assert {:ok, _} = Metadata.update_schema(table, %{last_refresh: to_string(column)})
+    end
   end
 
   test "cursor ownership is enforced before active and terminal results", %{table: table} do

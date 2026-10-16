@@ -169,7 +169,7 @@ rows = LanceDB.Query.stream(LanceDB.Query.new(target, :scan, filter: "id <= 100"
 ```
 
 `Table.add/3` reads the source immediately and returns a `WriteResult`. It
-uses the stored schema. It uses the same producer loop as
+uses the stored writable fields. It uses the same producer loop as
 `Table.add(table,
 Source.rows(rows))`. The default is one commit. Use
 `commit: :batch` to keep confirmed earlier commits if a later batch fails.
@@ -180,6 +180,20 @@ An empty append reports zero rows, zero commits, and a `nil` version. An
 empty overwrite clears rows in one commit. See
 [Ingestion controls and write
 results](#ingestion-controls-and-write-results).
+
+## Writing tables with computed columns
+
+Writes to [SQL computed columns](schema.md#sql-computed-columns) supply only
+ordinary writable fields. Omit computed fields entirely, including nulls, and
+use `Table.write_schema/1` for Arrow batch or explicit Source schemas. This
+applies to append, merge, upsert, and incremental `commit: :batch` insertion.
+Partial updates can change ordinary inputs. Refresh the computed column afterward
+to update its values; new rows start with null placeholders.
+
+The pinned SDK's overwrite path replaces the table schema. `Table.add/3` rejects
+overwrite on computed-column tables before source consumption to preserve
+declarations. Top-level user metadata replacements preserve declarations and
+freshness tracking. See the schema guide for dependency and refresh behavior.
 
 ## Upserts and updates
 
@@ -196,7 +210,7 @@ It uses one merge operation. The default key is `:id`; `:timeout_ms` and
 ```
 
 Use `on: [:tenant_id, :id]` for a composite key. Incoming keys must be
-unique, non-null strings or integers. Supply every table column with
+unique, non-null strings or integers. Supply every writable table column with
 matching types. Upserts replace complete rows. Rows absent from the incoming
 batch stay unchanged. Repeating a batch with the same keys adds no rows if
 existing keys are unique.
@@ -295,7 +309,8 @@ does not limit updates or inserts.
 
 Supply the source rows and update condition separately.
 
-Incoming rows must include every table field. Keys must be unique, non-null
+Incoming rows must include every writable table field and omit computed columns.
+Keys must be unique, non-null
 strings or integers. `:on` defaults to `:id` and also accepts composite
 keys. Use unique keys in the target table. The merge does not add a
 uniqueness constraint.
@@ -426,7 +441,7 @@ the whole source. Native validation keeps a set of keys.
 Memory use thus grows with distinct keys, although row batches use bounded
 producer buffering. Streamed merges return `WriteResult`.
 
-For computed columns, a callback receives each native batch from an
+For columns computed once by an Elixir backfill, a callback receives each native batch from an
 independent snapshot. It returns a native batch or a list of row maps for
 new columns:
 

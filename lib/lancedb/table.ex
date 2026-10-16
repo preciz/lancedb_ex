@@ -40,7 +40,10 @@ defmodule LanceDB.Table do
   end
 
   @doc """
-  Writes a row list or Source using the stored table schema. One commit is the default; commit: :batch explicitly enables incremental insertion. Empty append is a no-op; empty overwrite clears rows.
+  Writes a row list or Source using the stored writable fields. Computed columns
+  must be omitted; `write_schema/1` returns the input schema. One commit is the default;
+  commit: :batch explicitly enables incremental insertion. Empty append is a no-op;
+  empty overwrite clears rows.
 
   Returns `{:ok, %LanceDB.WriteResult{inserted: count, version: commit_version}}`.
 
@@ -66,6 +69,8 @@ defmodule LanceDB.Table do
   Overwrite retains the stored schema and requires `commit: :once`. Each input
   batch is validated before writing. With `commit: :batch`, later invalid input
   leaves confirmed earlier commits in place; error details report that progress.
+  Overwrite on a table with computed columns returns an unsupported error before
+  source consumption: the pinned SDK would replace its schema and erase declarations.
   """
   @spec add(table(), [map()] | LanceDB.Source.t(), keyword()) :: result(LanceDB.WriteResult.t())
   def add(table, records, opts \\ []) do
@@ -116,6 +121,51 @@ defmodule LanceDB.Table do
   end
 
   @doc """
+  Returns the stored schema excluding computed columns, for append and merge input.
+
+  Use it with `LanceDB.Batch.from_rows/2` and explicit `LanceDB.Source` schemas.
+  `schema/1` still returns every stored field, including computed declarations.
+  Ordinary writes require all writable fields and reject computed fields.
+  """
+  @spec write_schema(table()) :: result(LanceDB.Schema.t())
+  def write_schema(table) do
+    LanceDB.Execution.run(:write_schema, fn ->
+      case Backend.get_schema_json(table) do
+        {:ok, json} -> SchemaCodec.decode_write_schema(json)
+        error -> error
+      end
+    end)
+  end
+
+  @doc """
+  Materializes missing or stale fragments of a SQL computed column.
+
+  Returns `LanceDB.RefreshResult` with `:rows_filled` and the operation's
+  `:version`, including when no rows need refreshing. Refresh dependencies
+  first. Snapshots reject this mutation. Reads do not refresh automatically.
+  """
+  @spec refresh_column(table(), String.t() | atom()) :: result(LanceDB.RefreshResult.t())
+  def refresh_column(table, column) do
+    LanceDB.Execution.run(:refresh_column, fn ->
+      Backend.refresh_column(table, LanceDB.Options.column_name!(column))
+    end)
+  end
+
+  @doc """
+  Starts an in-process SQL computed-column refresh through `LanceDB.Job`.
+
+  The job retains write admission until completion and survives caller exit.
+  `LanceDB.Job.wait/2` returns the same `LanceDB.RefreshResult` contract as
+  `refresh_column/2`. Cancellation is best effort and cannot undo commits.
+  """
+  @spec refresh_column_async(table(), String.t() | atom()) :: result(LanceDB.Job.t())
+  def refresh_column_async(table, column) do
+    LanceDB.Execution.run(:refresh_column_async, fn ->
+      Backend.refresh_column_async(table, LanceDB.Options.column_name!(column))
+    end)
+  end
+
+  @doc """
   Records one existing column as the table's unenforced primary key.
 
   Accepts a string or atom field path. The supported types are `:int32`,
@@ -148,7 +198,8 @@ defmodule LanceDB.Table do
 
   The `:on` option accepts a column name or a non-empty list of column names
   (default `:id`). Incoming keys must be unique, non-null strings or integers.
-  Records must include every table column with matching types. Rows absent
+  Records must include every writable table column with matching types and omit
+  computed columns. Use `write_schema/1` for batch and Source schemas. Rows absent
   from the input are left unchanged. Existing table keys should also be unique;
   this operation does not add a uniqueness constraint or deduplicate old rows.
 
@@ -178,7 +229,7 @@ defmodule LanceDB.Table do
     * `:use_index` - Use the join-key index (default true)
 
   Update conditions may refer to `source.column` and `target.column`. Deletion
-  conditions use unqualified target column names (for example `"tenant = 'a'"`). Source rows must include every table field
+  conditions use unqualified target column names (for example `"tenant = 'a'"`). Source rows must include every writable table field and omit computed columns,
   and have unique, non-null string/integer keys; existing target keys should be
   unique too. A failed update condition leaves the matched row unchanged.
 

@@ -87,7 +87,7 @@ fn owned_metadata(key: &str) -> bool {
     matches!(
         key,
         "ARROW:extension:name" | "ARROW:extension:metadata" | "lance-encoding:blob"
-    ) || primary_key_metadata(key)
+    ) || immutable_metadata(key)
 }
 
 fn primary_key_metadata(key: &str) -> bool {
@@ -96,6 +96,13 @@ fn primary_key_metadata(key: &str) -> bool {
         lance_core::datatypes::LANCE_UNENFORCED_PRIMARY_KEY
             | lance_core::datatypes::LANCE_UNENFORCED_PRIMARY_KEY_POSITION
     )
+}
+
+fn immutable_metadata(key: &str) -> bool {
+    primary_key_metadata(key)
+        || key == "computed_column"
+        || key.starts_with("computed_column.")
+        || key.starts_with("computed_refresh.")
 }
 
 /// Replacement changes user metadata and keeps engine-owned markers.
@@ -110,6 +117,7 @@ pub(crate) fn prepare_metadata(
     let field = schema
         .field(&path)
         .ok_or_else(|| format!("Column '{path}' does not exist"))?;
+    crate::compat::computed::validate_field_metadata(&schema, field)?;
     for (key, value) in &metadata {
         if owned_metadata(key) && value.as_ref() != field.metadata.get(key) {
             return Err(Failure::new(
@@ -120,11 +128,11 @@ pub(crate) fn prepare_metadata(
             ));
         }
     }
-    // Lance rejects even identical writes to an installed primary-key marker.
-    metadata.retain(|key, _| !primary_key_metadata(key));
-    let preserve_primary_key = replace && field.is_unenforced_primary_key();
-    if preserve_primary_key {
-        // Express replacement as a delta, leaving the immutable marker untouched.
+    // The SDK rejects even identical writes to reserved declarations.
+    metadata.retain(|key, _| !immutable_metadata(key));
+    let preserve_declarations = replace && field.metadata.keys().any(|key| immutable_metadata(key));
+    if preserve_declarations {
+        // Express replacement as a delta, leaving reserved declarations untouched.
         for key in field.metadata.keys().filter(|key| !owned_metadata(key)) {
             metadata.entry(key.clone()).or_insert(None);
         }
@@ -138,6 +146,6 @@ pub(crate) fn prepare_metadata(
     Ok(lancedb::table::FieldMetadataUpdate {
         path,
         metadata,
-        replace: replace && !preserve_primary_key,
+        replace: replace && !preserve_declarations,
     })
 }

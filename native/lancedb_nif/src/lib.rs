@@ -15,6 +15,7 @@ mod cache;
 mod cloning;
 mod codec;
 mod compat;
+mod computed;
 mod connection;
 mod creation;
 mod cursor;

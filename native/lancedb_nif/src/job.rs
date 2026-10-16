@@ -4,16 +4,64 @@ use crate::{
     execution::Permit,
     resources::{atoms, RUNTIME},
 };
-use rustler::{Atom, Env, ResourceArc, Term};
+use rustler::{Atom, Encoder, Env, ResourceArc, Term};
 use std::{
     panic::{RefUnwindSafe, UnwindSafe},
     sync::Arc,
     time::Duration,
 };
 
+#[derive(Clone)]
+enum JobHandle {
+    Index(Arc<lancedb::job::Job>),
+    Refresh(Arc<lancedb::job::Job<lancedb::function::RefreshColumnResult>>),
+}
+
+#[derive(Clone)]
+enum JobResult {
+    Created,
+    Refresh(crate::computed::RefreshResult),
+}
+
+impl Encoder for JobResult {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        match self {
+            Self::Created => atoms::created().encode(env),
+            Self::Refresh(result) => crate::wire::Refresh(result.clone()).encode(env),
+        }
+    }
+}
+
+impl JobHandle {
+    async fn wait(&self) -> Result<JobResult, Failure> {
+        match self {
+            Self::Index(job) => job.wait().await.map(|()| JobResult::Created),
+            Self::Refresh(job) => job
+                .wait()
+                .await
+                .map(|result| JobResult::Refresh(result.into())),
+        }
+        .map_err(Failure::write_error)
+    }
+
+    async fn status(&self) -> lancedb::Result<String> {
+        match self {
+            Self::Index(job) => job.status().await,
+            Self::Refresh(job) => job.status().await,
+        }
+    }
+
+    async fn cancel(&self) -> lancedb::Result<()> {
+        match self {
+            Self::Index(job) => job.cancel().await,
+            Self::Refresh(job) => job.cancel().await,
+        }
+    }
+}
+
 pub struct JobResource {
-    job: Arc<lancedb::job::Job>,
-    terminal: tokio::sync::watch::Receiver<Option<Result<(), Failure>>>,
+    job: JobHandle,
+    terminal: tokio::sync::watch::Receiver<Option<Result<JobResult, Failure>>>,
 }
 impl RefUnwindSafe for JobResource {}
 impl UnwindSafe for JobResource {}
@@ -21,22 +69,32 @@ impl UnwindSafe for JobResource {}
 impl rustler::Resource for JobResource {}
 impl JobResource {
     pub(crate) fn new(job: lancedb::job::Job, permit: Permit) -> ResourceArc<Self> {
-        let job = Arc::new(job);
+        Self::start(JobHandle::Index(Arc::new(job)), permit)
+    }
+
+    pub(crate) fn refresh(
+        job: lancedb::job::Job<lancedb::function::RefreshColumnResult>,
+        permit: Permit,
+    ) -> ResourceArc<Self> {
+        Self::start(JobHandle::Refresh(Arc::new(job)), permit)
+    }
+
+    fn start(job: JobHandle, permit: Permit) -> ResourceArc<Self> {
         let waiting = job.clone();
         let (complete, terminal) = tokio::sync::watch::channel(None);
         RUNTIME.spawn(async move {
-            let outcome = waiting.wait().await.map_err(Failure::write_error);
+            let outcome = waiting.wait().await;
             drop(permit);
             complete.send_replace(Some(outcome));
         });
         ResourceArc::new(Self { job, terminal })
     }
-    async fn wait(&self) -> Result<(), Failure> {
+    async fn wait(&self) -> Result<JobResult, Failure> {
         let mut terminal = self.terminal.clone();
         let result = terminal
             .wait_for(Option::is_some)
             .await
-            .map_err(|_| Failure::new("execution", "Index job watcher terminated"))?;
+            .map_err(|_| Failure::new("execution", "Native job watcher terminated"))?;
         result.clone().unwrap()
     }
 }
@@ -63,12 +121,10 @@ fn job_wait(
             Some(ms) => tokio::time::timeout(Duration::from_millis(ms), job.wait())
                 .await
                 .map_err(|_| {
-                    Failure::new("timeout", "Index job wait timed out; job continues running")
-                        .waiting()
+                    Failure::new("timeout", "Job wait timed out; job continues running").waiting()
                 })?,
         }
-        .map_err(Failure::from_error)?;
-        Ok::<_, Failure>(atoms::created())
+        .map_err(Failure::from_error)
     });
     Ok(atoms::ok())
 }

@@ -37,9 +37,12 @@ defmodule LanceDB.Metadata do
   options as `update_schema/3`. Use `replace: true` to replace user metadata.
   An empty replacement map clears user metadata.
 
-  Replacement keeps extension markers and the unenforced primary-key marker.
+  Replacement keeps extension markers, primary-key markers, computed declarations,
+  and refresh tracking metadata.
   An attempt to change these engine-owned markers returns an unsupported error.
   Use `LanceDB.Table.set_unenforced_primary_key/2` to designate a primary key.
+  Nested metadata edits on computed containers or their inputs are unsupported
+  by the pinned SDK; edit top-level user metadata instead.
   `LanceDB.Table.schema/1` returns the metadata for each field.
   """
   @spec update_field(table(), String.t() | atom(), map(), keyword()) ::

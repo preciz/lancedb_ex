@@ -60,6 +60,14 @@ async fn ingest_open_impl(
     let options = Options::parse(&options)?;
     table.ensure_mutable()?;
     let schema = table.table.schema().await.map_err(Failure::from_error)?;
+    let writable = crate::computed::write_schema(schema.clone());
+    if options.is_overwrite() && writable.fields().len() != schema.fields().len() {
+        return Err(Failure::new(
+            "unsupported",
+            "Overwrite would erase computed-column declarations; use append, update, or merge instead",
+        ));
+    }
+    let schema = writable;
     let worker = Writer::spawn_operation(schema.clone(), move |stream, count| async move {
         let _permit = permit;
         let version = ingestion::execute(&table.table, stream, options, progress).await?;

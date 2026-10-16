@@ -19,6 +19,10 @@ pub(crate) struct Options {
 }
 
 impl Options {
+    pub(crate) fn is_overwrite(&self) -> bool {
+        self.mode.as_deref() == Some("overwrite")
+    }
+
     pub(crate) fn parse(json: &str) -> Result<Self, Failure> {
         let options: Self = serde_json::from_str(json).map_err(Failure::from_error)?;
         if options

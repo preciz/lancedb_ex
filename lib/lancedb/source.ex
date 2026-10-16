@@ -7,7 +7,7 @@ defmodule LanceDB.Source do
   `rows/2` consumes an enumerable of maps in bounded chunks. `batches/2` consumes
   native Arrow batches without converting them to rows. Supply `schema:` when
   creating a table, either on the Source or as the creation operation's option;
-  existing-table writes use the stored schema and reject incompatible explicitly
+  existing-table writes use the writable schema and reject incompatible explicitly
   supplied source fields. Conflicting source and creation schemas raise before
   input is consumed. Sources are lazy and run in the calling process. Reuse
   requires a repeatable enumerable.
@@ -15,6 +15,9 @@ defmodule LanceDB.Source do
   Structured `LanceDB.Error` exceptions retain their kind and details when input
   consumption or cleanup fails. Other producer exceptions become errors with
   kind `:source`.
+
+  For a table with computed columns, omit those fields and obtain an input schema
+  with `LanceDB.Table.write_schema/1`; `Table.schema/1` includes the read-only fields.
   """
   alias LanceDB.{Batch, Schema}
   @enforce_keys [:kind, :data]
@@ -77,7 +80,7 @@ defmodule LanceDB.Source do
 
   def check_schema(table, %__MODULE__{schema: schema}) do
     with {:ok, json} <- LanceDB.Backend.get_schema_json(table),
-         {:ok, stored} <- SchemaCodec.decode(json) do
+         {:ok, stored} <- SchemaCodec.decode_write_schema(json) do
       if schema.fields == stored.fields,
         do: :ok,
         else:

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add SQL computed-column declarations, explicit refresh and typed refresh jobs.
+  Use writable-only input schemas for row and Arrow ingestion, merges and upserts;
+  expose `Table.write_schema/1`, preserve declaration and freshness metadata, and
+  guard SDK overwrite and nested-metadata cases that would invalidate declarations
+  or later refreshes. Index jobs retain their existing result contract.
 - Add the boolean `:disable_scoring_autoprojection` query option to omit automatic
   distance, full-text, and hybrid relevance scores while preserving explicitly
   selected scores, internal reranker inputs, row IDs, and batch query indexes.

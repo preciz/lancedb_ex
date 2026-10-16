@@ -25,6 +25,33 @@ defmodule LanceDB.SchemaEvolution do
   end
 
   @doc """
+  Declares SQL computed columns without filling their values.
+
+  Accepts the name/expression pairs and `LanceDB.Expr` values used by
+  `add_columns/2`. The SDK infers types and records dependencies. New columns
+  start nullable and empty. Use `LanceDB.Table.refresh_column/2` or
+  `LanceDB.Table.refresh_column_async/2` to materialize them.
+
+  Ordered lists preserve declaration order when a later expression reads an
+  earlier computed column. Refresh dependencies first. Existing rows retain
+  old computed values after input changes until refreshed; newly inserted
+  rows have null placeholders. Ordinary writes must omit computed columns.
+
+  Inputs cannot be renamed, retyped or dropped while a declaration reads them.
+  Drop dependent computed columns first to change their definitions or inputs.
+  Expressions must be deterministic. Registered Functions are not exposed.
+  Returns a WriteResult with the declaration's committed version.
+  """
+  @spec add_computed_columns(table(), map() | list()) :: result(LanceDB.WriteResult.t())
+  def add_computed_columns(table, expressions) do
+    LanceDB.Execution.write(
+      :add_computed_columns,
+      fn -> SchemaEvolution.add_computed_columns(table, expressions) end,
+      &LanceDB.WriteResult.version/2
+    )
+  end
+
+  @doc """
   Renames columns, changes nullability, or converts top-level column types.
 
   Supply a map or list of `{name, options}` pairs, such as:

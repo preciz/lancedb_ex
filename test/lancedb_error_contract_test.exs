@@ -25,6 +25,31 @@ defmodule LanceDB.ErrorContractTest do
 
   def event(event, _measurements, metadata, pid), do: send(pid, {event, metadata})
 
+  test "computed-column argument failures raise within operation spans", %{table: table} do
+    for expressions <- [
+          nil,
+          [],
+          %{},
+          [bad: nil],
+          [bad: ""],
+          [bad: 1],
+          [bad: "x", bad: "x"],
+          [{"a.b", "id"}]
+        ] do
+      assert_argument_error(:add_computed_columns, fn ->
+        SchemaEvolution.add_computed_columns(table, expressions)
+      end)
+    end
+
+    for column <- [nil, 123, "", " \n", <<255>>, []] do
+      assert_argument_error(:refresh_column, fn -> LanceDB.Table.refresh_column(table, column) end)
+
+      assert_argument_error(:refresh_column_async, fn ->
+        LanceDB.Table.refresh_column_async(table, column)
+      end)
+    end
+  end
+
   test "primary key arguments raise within their operation span", %{table: table} do
     for column <- [nil, 123, "", " \n", <<255>>, [], [:id], [:id, :other]] do
       assert_argument_error(:set_unenforced_primary_key, fn ->

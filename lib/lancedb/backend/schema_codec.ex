@@ -11,6 +11,15 @@ defmodule LanceDB.Backend.SchemaCodec do
     end
   end
 
+  @spec decode_write_schema(String.t()) ::
+          {:ok, Schema.t()} | {:error, JSON.decode_error_reason()}
+  def decode_write_schema(json) do
+    with {:ok, schema} <- decode(json) do
+      fields = Enum.reject(schema.fields, &(&1.metadata["computed_column"] == "true"))
+      {:ok, %{schema | fields: fields}}
+    end
+  end
+
   defp from_wire(wire, representation) do
     module = if representation == :arrow, do: LanceDB.ArrowSchema, else: LanceDB.Schema
 

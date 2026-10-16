@@ -44,7 +44,9 @@ defmodule LanceDB.Backend do
 
   @spec job_status(LanceDB.Job.t()) :: result(String.t())
   def job_status(job), do: call(:job_status, [job])
-  @spec job_wait(LanceDB.Job.t(), non_neg_integer() | nil) :: result(:created)
+
+  @spec job_wait(LanceDB.Job.t(), non_neg_integer() | nil) ::
+          result(:created | LanceDB.RefreshResult.t())
   def job_wait(job, timeout), do: call(:job_wait, [job, timeout])
   @spec job_cancel(LanceDB.Job.t()) :: result(:ok)
   def job_cancel(job), do: call(:job_cancel, [job])
@@ -166,6 +168,17 @@ defmodule LanceDB.Backend do
   def stream_close(cursor), do: call(:stream_close, [cursor])
   @spec add_columns(Table.t(), [{String.t(), String.t()}]) :: result(Native.version_output())
   def add_columns(table, expressions), do: call(:add_columns, [table, expressions])
+
+  @spec add_computed_columns(Table.t(), [{String.t(), String.t()}]) ::
+          result(Native.version_output())
+  def add_computed_columns(table, expressions),
+    do: call(:add_computed_columns, [table, expressions])
+
+  @spec refresh_column(Table.t(), String.t()) :: result(LanceDB.RefreshResult.t())
+  def refresh_column(table, column), do: call(:refresh_column, [table, column])
+
+  @spec refresh_column_async(Table.t(), String.t()) :: result(LanceDB.Job.t())
+  def refresh_column_async(table, column), do: call(:refresh_column_async, [table, column])
   @spec alter_columns(Table.t(), [map()]) :: result(Native.version_output())
   def alter_columns(table, changes), do: call(:alter_columns, [table, JSON.encode!(changes)])
   @spec drop_columns(Table.t(), [String.t()]) :: result(Native.version_output())
@@ -285,7 +298,12 @@ defmodule LanceDB.Backend do
   defp unwrap(%Table{resource: resource}), do: resource
   defp unwrap(value), do: value
 
-  defp wrap({:ok, resource}, :create_index_async), do: {:ok, %LanceDB.Job{resource: resource}}
+  defp wrap({:ok, resource}, operation)
+       when operation in [:create_index_async, :refresh_column_async],
+       do: {:ok, %LanceDB.Job{resource: resource}}
+
+  defp wrap({:ok, {:refresh, result}}, operation) when operation in [:refresh_column, :job_wait],
+    do: {:ok, LanceDB.RefreshResult.from_wire(result)}
 
   defp wrap({:ok, resource}, :connect), do: {:ok, %Connection{resource: resource}}
 
