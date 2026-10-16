@@ -16,6 +16,22 @@ The first source build can take a long time and use much disk space.
 
 Use the committed Cargo lockfile and the SDK version `=0.40.0`.
 
+Source CI and the native build workflow run `cargo audit` against the committed
+lockfile and the current RustSec advisory database before compiling. Install
+the same scanner locally and check both dependency ecosystems:
+
+```sh
+cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+cargo audit --file Cargo.lock --deny yanked
+mix hex.audit
+```
+
+Known vulnerabilities and yanked crates stop CI and native artifact publication
+or verification.
+The transitive `paste` and `unsafe-libyaml` crates currently produce upstream
+maintenance notices, which remain visible as warnings. These notices do not
+suppress security advisories for either crate.
+
 ```sh
 export LANCEDB_BUILD=true
 mix deps.get
@@ -214,8 +230,8 @@ After all checks pass, tag and push the package source, then run the release
 script from that checkout:
 
 ```sh
-git tag -a v0.5.0 -m "Release v0.5.0"
-git push origin main v0.5.0
+git tag -a v0.5.1 -m "Release v0.5.1"
+git push origin main v0.5.1
 elixir scripts/release.exs
 ```
 

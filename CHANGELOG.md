@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.5.0
+## 0.5.1
+
+- Update the native dependency lock to Rustls 0.23.46 and Quinn 0.11.19,
+  incorporating their published security fixes without changing LanceDB 0.40.0
+  or Lance 13.0.0. Replace yanked ChaCha20 0.10.1 with 0.10.2. Rebuild all
+  supported native targets with these dependencies.
+- Check RustSec advisories in source CI and before native artifact builds or
+  verification, and check Hex dependency advisories in source CI. Known
+  vulnerabilities and yanked crates fail these checks; upstream maintenance
+  notices remain visible.
+
+This release includes the features prepared for 0.5.0. The 0.5.0 candidate
+was tagged but was not published to Hex; its tag remains unchanged.
 
 - Add list-element full-text indexes and match/phrase queries with public nested
   field paths. Preserve `_doc_index` through projections, streams and schema

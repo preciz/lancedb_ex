@@ -12,7 +12,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  audit:
+    name: Rust dependency advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Install pinned RustSec scanner
+        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+      - name: Reject vulnerable locked dependencies
+        run: cargo audit --file Cargo.lock --deny yanked
+
   check:
+    needs: audit
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -37,6 +50,7 @@ jobs:
           restore-keys: ci-ubuntu-24.04-${{ runner.arch }}-
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: mix deps.get
+      - run: mix hex.audit
       - run: mix format --check-formatted
       - run: mix credo --strict
       - run: cargo fmt --all --check

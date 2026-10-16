@@ -36,7 +36,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.5.0"}
+    {:lancedb_ex, "~> 0.5.1"}
   ]
 end
 ```
@@ -53,7 +53,7 @@ tree entry. Applications using the optional [table cache](table-cache.md)
 supervise that component themselves.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
-default artifact URL. The Elixir package version is `0.5.0`, and the
+default artifact URL. The Elixir package version is `0.5.1`, and the
 package uses SDK `0.40.0`. These versions do not identify the
 wrapper binary. Each native build has the SemVer version
 `0.0.0+<full-source-revision>`.
@@ -85,7 +85,7 @@ optimization, and a production application release on each target.
 To use the released source with its verified archives, pin the Git dependency:
 
 ```elixir
-{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.5.0"}
+{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.5.1"}
 ```
 
 Then run `mix deps.get` and `mix compile`. This installation uses the

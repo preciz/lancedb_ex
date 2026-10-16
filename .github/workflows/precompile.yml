@@ -31,6 +31,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.source_revision }}
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Install pinned RustSec scanner
+        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+      - name: Reject vulnerable locked dependencies before building or verifying artifacts
+        run: cargo audit --file Cargo.lock --deny yanked
       - name: Validate immutable identity and refuse replacement
         id: identity
         env:
