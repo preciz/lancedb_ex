@@ -1,6 +1,7 @@
 defmodule LanceDB.Index.Options do
   alias LanceDB.Index.FTSOptions
   @moduledoc false
+  @scalar_types [:btree, :bitmap, :label_list, :fm, :zonemap, :ngram, :fts]
   @vector_types [:ivf_flat, :ivf_pq, :ivf_sq, :ivf_rq, :hnsw_flat, :hnsw_pq, :hnsw_sq]
   @hnsw_types [:hnsw_flat, :hnsw_pq, :hnsw_sq]
   @training_options [:num_partitions, :sample_rate, :max_iterations, :target_partition_size]
@@ -31,7 +32,7 @@ defmodule LanceDB.Index.Options do
 
     type = Keyword.get(opts, :type, :auto)
 
-    if type not in ([:auto, :btree, :bitmap, :label_list, :fm, :zonemap, :fts] ++ @vector_types),
+    if type not in ([:auto] ++ @scalar_types ++ @vector_types),
       do: raise(ArgumentError, "unsupported index type")
 
     train = train!(opts, type)
@@ -82,7 +83,7 @@ defmodule LanceDB.Index.Options do
     train = Keyword.get(opts, :train, true)
     if not is_boolean(train), do: raise(ArgumentError, "train must be a boolean")
 
-    if not train and type not in [:btree, :bitmap, :label_list, :fm, :zonemap, :fts],
+    if not train and type not in @scalar_types,
       do: raise(ArgumentError, "train: false requires an explicit scalar index type")
 
     train

@@ -76,13 +76,18 @@ defmodule LanceDB.Index do
   @doc """
   Creates an index on one column, returning `{:ok, :created}` after completion.
 
-  Types: `:auto` (default), `:btree`, `:bitmap`, `:label_list`, `:fm`, `:zonemap`, `:ivf_flat`, `:ivf_pq`,
-  `:ivf_sq`, `:ivf_rq`, `:hnsw_flat`, `:hnsw_pq`, `:hnsw_sq`, `:fts`.
+  Types: `:auto` (default), `:btree`, `:bitmap`, `:label_list`, `:fm`, `:zonemap`, `:ngram`,
+  `:ivf_flat`, `:ivf_pq`, `:ivf_sq`, `:ivf_rq`, `:hnsw_flat`, `:hnsw_pq`, `:hnsw_sq`, `:fts`.
   `:label_list` accelerates `array_has_any`/`array_has_all` on lists;
   `:fm` accelerates `contains(column, 'substring')` on strings.
   `:zonemap` uses min/max summaries of row ranges to prune scalar filters,
   especially on columns whose nearby rows have similar values. It has no
-  type-specific options. These three types must be selected explicitly.
+  type-specific options. `:ngram` uses fixed trigrams to accelerate `contains`,
+  `LIKE`, and supported `regexp_like`/`regexp_match` filters on `:string` and
+  `:large_string` columns. Candidate rows are rechecked against the original
+  filter; patterns without useful trigrams can require a scan. It has no
+  type-specific options and is separate from the FTS n-gram analyzer.
+  Select `:label_list`, `:fm`, `:zonemap`, and `:ngram` explicitly.
   Options: `:name`, `:replace` (default false), and, for vector indexes,
   `:distance` (`:l2`, `:cosine`, `:dot`, or `:hamming` for uint8 vectors), `:num_partitions` or
   `:target_partition_size` (mutually exclusive), `:sample_rate` (SDK default 256),

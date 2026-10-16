@@ -62,7 +62,7 @@ async fn update_rows_impl(
         .map_err(Failure::from_error)?;
     let mut update = table_res.table.update();
     if let Some(filter) = filter {
-        update = update.only_if(filter);
+        update = update.only_if(crate::compat::ngram::filter(filter)?);
     }
     for (column, value) in changes {
         let field = schema
@@ -131,6 +131,7 @@ async fn delete_rows_result_impl(
     predicate: String,
 ) -> Result<DeleteResult, Failure> {
     table.ensure_mutable()?;
+    let predicate = crate::compat::ngram::filter(predicate)?;
     let result = table
         .table
         .delete(&predicate)

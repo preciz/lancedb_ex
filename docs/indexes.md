@@ -53,6 +53,7 @@ Each index covers one column. Supported types:
 - `:label_list`: list membership filters with `array_has_any` and `array_has_all`.
 - `:fm`: case-sensitive substring filters with `contains`, including parts of words.
 - `:zonemap`: scalar filters using min/max summaries to skip ranges of rows.
+- `:ngram`: substring, `LIKE`, and supported regular-expression filters on text.
 - `:ivf_flat`: partitioned vector search without product quantization.
 - `:ivf_pq`: partitioned vector search with product quantization.
 - `:ivf_sq`: partitioned vector search with 8-bit scalar quantization.
@@ -62,7 +63,7 @@ Each index covers one column. Supported types:
 - `:hnsw_sq`: HNSW graphs within IVF partitions, with 8-bit scalar quantization.
 - `:fts`: tokenized full-text search on string columns.
 
-Choose `:label_list`, `:fm`, and `:zonemap` explicitly. `:auto` does not select them.
+Choose `:label_list`, `:fm`, `:zonemap`, and `:ngram` explicitly. `:auto` does not select them.
 LabelList supports scalar list elements such as strings and integers. FM
 supports the package's string columns. It does not tokenize or normalize
 text. Both types support naming, replacement, statistics, prewarming,
@@ -98,6 +99,55 @@ binary, date, time, and timestamp columns, including `:large_string` and
 `:replace`, and `:train` controls apply, as do asynchronous creation,
 statistics, prewarming, optimization, and deletion. `Index.list/1` and
 `Index.stats/2` report the type as `"ZONEMAP"`.
+
+### Substring and pattern indexes
+
+Use `:ngram` on a `:string` or `:large_string` column to accelerate substring
+and pattern filters. It indexes overlapping groups of three characters
+(trigrams). Queries use these to select candidate rows, then check the original
+filter to remove false positives. SQL case, accent, wildcard, and regular-expression
+semantics stay the same after index creation.
+
+```elixir
+{:ok, :created} = LanceDB.Index.create(table, :text, type: :ngram)
+{:ok, rows} = LanceDB.Query.query(table, filter: "contains(text, 'elixir')")
+{:ok, rows} = LanceDB.Query.query(table, filter: "text LIKE '%elixir%'")
+{:ok, rows} = LanceDB.Query.query(table, filter: "regexp_match(text, 'elixir.*otp')")
+
+# The same filters can be composed with expression and query builders:
+alias LanceDB.{Expr, Query}
+
+{:ok, rows} =
+  table
+  |> Query.new()
+  |> Query.where(Expr.like(Expr.col(:text), "%elixir%"))
+  |> Query.all()
+```
+
+Use `regexp_match` directly as a filter for regular-expression acceleration.
+`regexp_like` can also use the index when the SDK simplifies it to an indexable
+predicate, such as a literal substring `LIKE`. Acceleration depends on the
+pattern: a `contains` needle shorter than three characters bypasses the index.
+Patterns without usable trigrams can require a scan, as can `ILIKE` and
+case-insensitive regular expressions. Queries still return exact matches,
+including null handling and rows appended after indexing. Use `Query.explain/1`
+to inspect whether a particular filter uses the index.
+Unicode text is supported, but some patterns produce no usable trigrams.
+General regular expressions on `:large_string` can also require a scan because
+of SDK type conversions.
+
+Choose `:fm` for its existing `contains` support, or `:ngram` when you also
+need `LIKE` and regular-expression acceleration. These filters use SQL
+predicates rather than ranked full-text search. The configurable
+[FTS n-gram tokenizer](search.md#configurable-fts-analyzers) remains a separate
+feature.
+
+N-gram indexes use fixed SDK settings; they accept no analyzer or n-gram length
+options. Naming, replacement, `train: false`, asynchronous creation, statistics,
+prewarming, optimization, and deletion use the ordinary index APIs. Inspection
+reports the type as `"NGRAM"`.
+
+### Vector indexes
 
 LanceDB checks scalar type compatibility and vector training requirements.
 All seven vector index types accept these options:

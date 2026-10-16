@@ -106,6 +106,7 @@ fn count_rows(
     reference: Term<'_>,
 ) -> Result<Atom, Failure> {
     crate::request::read(env, reference, async move {
+        let filter = filter.map(crate::compat::ngram::filter).transpose()?;
         match table_res.table.count_rows(filter).await {
             Ok(count) => Ok(count),
             Err(e) => {

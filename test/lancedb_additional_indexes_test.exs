@@ -36,6 +36,14 @@ defmodule LanceDB.AdditionalIndexesTest do
     ])
   end
 
+  test("NGram indexes retain appended rows through the index lifecycle", context) do
+    check_index(context, :text, :ngram, "NGRAM", [
+      {"contains(text, 'ixir')", [1, 2]},
+      {"text LIKE '%ixir%'", [1, 2]},
+      {"regexp_like(text, 'ixir')", [1, 2]}
+    ])
+  end
+
   defp check_index(%{conn: conn, table: table}, column, type, index_type, filters) do
     for {filter, expected} <- filters do
       assert_ids(table, filter, expected)
@@ -79,9 +87,19 @@ defmodule LanceDB.AdditionalIndexesTest do
   test("new index types reject incompatible fields and vector/analyzer options", %{table: table}) do
     assert {:error, _} = LanceDB.Index.create(table, :id, type: :fm)
     assert {:error, _} = LanceDB.Index.create(table, :text, type: :label_list)
+    assert {:error, _} = LanceDB.Index.create(table, :id, type: :ngram)
+    assert {:error, _} = LanceDB.Index.create(table, :tags, type: :ngram)
 
-    for type <- [:label_list, :fm],
-        opts <- [[num_partitions: 1], [num_sub_vectors: 1], [m: 4], [analyzer: []]] do
+    for type <- [:label_list, :fm, :ngram],
+        opts <- [
+          [distance: :cosine],
+          [num_partitions: 1],
+          [num_sub_vectors: 1],
+          [m: 4],
+          [analyzer: []],
+          [block_size: 128],
+          [ngram_min_length: 2]
+        ] do
       assert_raise ArgumentError, fn ->
         LanceDB.Index.create(:unused, :tags, [type: type] ++ opts)
       end

@@ -74,7 +74,7 @@ fn index_builder(
     use lancedb::index::{
         scalar::{
             BTreeIndexBuilder, BitmapIndexBuilder, FmIndexBuilder, LabelListIndexBuilder,
-            ZoneMapIndexBuilder,
+            NGramIndexBuilder, ZoneMapIndexBuilder,
         },
         vector::{
             IvfFlatIndexBuilder, IvfHnswFlatIndexBuilder, IvfHnswPqIndexBuilder,
@@ -121,6 +121,7 @@ fn index_builder(
         "label_list" => Index::LabelList(LabelListIndexBuilder::default()),
         "fm" => Index::Fm(FmIndexBuilder::default()),
         "zonemap" => Index::ZoneMap(ZoneMapIndexBuilder::default()),
+        "ngram" => Index::NGram(NGramIndexBuilder::default()),
         "ivf_flat" => vector_index!(IvfFlat, IvfFlatIndexBuilder),
         "ivf_sq" => vector_index!(IvfSq, IvfSqIndexBuilder),
         "ivf_rq" => vector_index!(IvfRq, IvfRqIndexBuilder, num_bits => num_bits),

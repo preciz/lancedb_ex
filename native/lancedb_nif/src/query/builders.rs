@@ -90,7 +90,7 @@ async fn prepare_scan(
         )
         .await?;
     if let Some(filter) = filter {
-        query = query.only_if(filter);
+        query = query.only_if(crate::compat::ngram::filter(filter)?);
     }
     if let Some(selection) = projection.selection {
         query = query.select(selection);
@@ -118,7 +118,7 @@ async fn prepare_text(
         .apply(table.query().full_text_search(fts))
         .limit(limit);
     if let Some(filter) = filter {
-        query = query.only_if(filter);
+        query = query.only_if(crate::compat::ngram::filter(filter)?);
     }
     let projection = options
         .projection
@@ -145,6 +145,7 @@ async fn prepare_vector(
     distance_type: Option<String>,
     controls: SearchControls,
 ) -> Result<PreparedQuery, Failure> {
+    let filter = filter.map(crate::compat::ngram::filter).transpose()?;
     let batch = input.batch_singleton();
     let mut query = input
         .prepare(

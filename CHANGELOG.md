@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit `:ngram` indexes for substring, `LIKE`, and supported regular-expression
+  filters on string and large-string columns, with the existing index lifecycle
+  and asynchronous creation APIs. Preserve matches for untokenizable Unicode,
+  punctuation, and computed substring patterns despite the pinned SDK's index
+  fallback bug.
 - Add explicit `:zonemap` scalar indexes with synchronous and asynchronous
   creation, reusable definitions, and empty-index creation via `train: false`.
 

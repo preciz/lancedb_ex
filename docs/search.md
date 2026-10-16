@@ -482,6 +482,9 @@ options override these defaults.
 For n-gram settings, use `tokenizer: :ngram`. N-grams cannot store
 positions.
 
+For SQL substring, `LIKE`, or regular-expression filters, see the separate
+[n-gram scalar index](indexes.md#substring-and-pattern-indexes).
+
 The package does not include tokenizers that use external language models.
 
 For case-sensitive exact token matching, use `:raw`. Disable lowercase
