@@ -104,7 +104,9 @@ pub(crate) async fn hybrid_candidates(
     vector: lancedb::query::VectorQuery,
     text: lancedb::query::Query,
 ) -> Result<(Vec<RecordBatch>, Vec<RecordBatch>, String), Failure> {
-    let (vector, text) = futures::try_join!(run(vector, &None, true), run(text, &None, true))?;
+    let projection = OutputProjection::default();
+    let (vector, text) =
+        futures::try_join!(run(vector, &projection, true), run(text, &projection, true))?;
     Ok((
         vector.batches,
         text.batches,

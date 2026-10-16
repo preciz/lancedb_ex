@@ -69,7 +69,8 @@ defmodule LanceDB.Query do
   `select_as/2`. Hybrid expressions use stored columns in both channels.
 
   Scores remain available internally for ranking and custom hybrid rerankers.
-  `:with_row_id` and batch `query_index` are independent of this option.
+  `:with_row_id`, element FTS `_doc_index`, and batch `query_index` are
+  independent of this option.
   It applies to collected rows, streams, Arrow batches, and `schema/1`.
   """
   @spec options(t(), keyword()) :: t()

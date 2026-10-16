@@ -8,6 +8,14 @@ defmodule LanceDB.FTS do
   Without either, structured queries require exactly one indexed text column.
   `prepare/2` and `prepare/3` perform optional analyzer work and return reusable
   `LanceDB.FTS.Prepared` values for exact and fuzzy term composition.
+
+  Match and phrase leaves accept `document_granularity: :row | :list_element`.
+  Element searches return parent records plus `_doc_index`, a zero-based list
+  of coordinates through the nested lists. Coordinates survive projections and
+  score suppression. With no explicit setting, the SDK infers granularity from
+  the field's indexes, defaulting to rows when none exists; coexisting row and
+  element indexes require an explicit choice. Boolean and boost leaves must
+  share one element field. Multi-match and hybrid fusion require row documents.
   """
 
   import LanceDB.Options, only: [column_name!: 1, column_names!: 1]
@@ -53,7 +61,8 @@ defmodule LanceDB.FTS do
   Matches terms. Options: `:column`, `:operator` (`:or` default, or `:and`),
   `:boost` (positive float32 number, default 1), `:fuzziness` (0 default, 1, or 2),
   `:max_expansions` (positive uint32, default 50), and
-  `:prefix_length` (non-negative uint32, default 0).
+  `:prefix_length` (non-negative uint32, default 0). `:document_granularity`
+  accepts `:row` or `:list_element`; omission retains SDK index inference.
   Prefix lengths count Unicode code points. Automatic fuzziness is
   not exposed because this SDK treats it as an exact query.
 
@@ -89,10 +98,11 @@ defmodule LanceDB.FTS do
         :boost,
         :fuzziness,
         :max_expansions,
-        :prefix_length
+        :prefix_length,
+        :document_granularity
       ])
 
-    %{
+    query = %{
       type: :match,
       column: column!(opts),
       operator: operator!(opts),
@@ -101,23 +111,31 @@ defmodule LanceDB.FTS do
       max_expansions: count!(opts, :max_expansions, 50, 1),
       prefix_length: count!(opts, :prefix_length, 0, 0)
     }
+
+    granularity!(query, opts)
   end
 
   @doc """
-  Matches a phrase. Options: `:column` and non-negative `:slop` (default 0).
+  Matches a phrase. Options: `:column`, non-negative `:slop` (default 0),
+  and `:document_granularity` (`:row` or `:list_element`).
   Existing FTS indexes must store positions. An explicit column permits scans
   without an index; unindexed current rows are scanned unless fast search is used.
   """
   @spec phrase(String.t(), keyword()) :: t()
   def phrase(text, opts \\ []) do
-    opts = Keyword.validate!(opts, [:column, :slop])
+    opts = Keyword.validate!(opts, [:column, :slop, :document_granularity])
 
-    wrap(%{
-      type: :phrase,
-      text: text!(text),
-      column: column!(opts),
-      slop: count!(opts, :slop, 0, 0)
-    })
+    wrap(
+      granularity!(
+        %{
+          type: :phrase,
+          text: text!(text),
+          column: column!(opts),
+          slop: count!(opts, :slop, 0, 0)
+        },
+        opts
+      )
+    )
   end
 
   @doc """
@@ -227,7 +245,8 @@ defmodule LanceDB.FTS do
         :max_expansions,
         :prefix_length,
         :exact_numbers,
-        :exact_boost
+        :exact_boost,
+        :document_granularity
       ])
 
     policy = prepared_fuzziness!(Keyword.get(opts, :fuzziness, 0))
@@ -294,6 +313,20 @@ defmodule LanceDB.FTS do
   defp prepared_distance(fixed, _text), do: fixed
 
   defp wrap(query), do: %__MODULE__{query: query}
+
+  defp granularity!(query, opts) do
+    if Keyword.has_key?(opts, :document_granularity) do
+      value = Keyword.fetch!(opts, :document_granularity)
+
+      if value not in [:row, :list_element],
+        do: raise(ArgumentError, "document_granularity must be :row or :list_element")
+
+      Map.put(query, :document_granularity, value)
+    else
+      query
+    end
+  end
+
   defp child!(%__MODULE__{query: query}), do: query
   defp child!(text), do: text |> __MODULE__.match() |> query!()
 

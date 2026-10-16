@@ -1,6 +1,6 @@
 defmodule LanceDB.Index.FTSOptions do
   @moduledoc false
-  @keys [:block_size, :memory_limit_mb, :num_workers, :format_version]
+  @keys [:block_size, :memory_limit_mb, :num_workers, :format_version, :document_granularity]
   @spec keys() :: [atom()]
   def keys, do: @keys
 
@@ -13,6 +13,11 @@ defmodule LanceDB.Index.FTSOptions do
 
     validate_sizes!(values)
     validate_format!(values, opts)
+
+    if Keyword.has_key?(values, :document_granularity) and
+         values[:document_granularity] not in [:row, :list_element],
+       do: raise(ArgumentError, "document_granularity must be :row or :list_element")
+
     Map.new(values)
   end
 

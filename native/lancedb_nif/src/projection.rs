@@ -10,7 +10,20 @@ pub(crate) struct ProjectionRequest {
     select: Option<Vec<(String, String)>>,
 }
 
-pub(crate) type OutputProjection = Option<Vec<(String, String)>>;
+#[derive(Default)]
+pub(crate) struct OutputProjection {
+    pub(crate) columns: Option<Vec<(String, String)>>,
+    preserve_doc_index: bool,
+}
+
+impl From<Option<Vec<(String, String)>>> for OutputProjection {
+    fn from(columns: Option<Vec<(String, String)>>) -> Self {
+        Self {
+            columns,
+            ..Self::default()
+        }
+    }
+}
 
 pub(crate) struct Projection {
     pub(crate) selection: Option<Select>,
@@ -23,6 +36,7 @@ pub(crate) struct ResultPolicy {
     score: Option<&'static str>,
     with_row_id: bool,
     hybrid: bool,
+    text: bool,
 }
 
 impl ResultPolicy {
@@ -31,12 +45,14 @@ impl ResultPolicy {
             score: None,
             with_row_id,
             hybrid: false,
+            text: false,
         }
     }
 
     pub(crate) fn text(with_row_id: bool) -> Self {
         Self {
             score: Some("_score"),
+            text: true,
             ..Self::plain(with_row_id)
         }
     }
@@ -50,6 +66,7 @@ impl ResultPolicy {
             }),
             with_row_id,
             hybrid,
+            text: false,
         }
     }
 
@@ -69,10 +86,14 @@ impl ResultPolicy {
     }
 
     fn finalize(self, mut projection: Projection) -> Projection {
+        // The SDK resolves omitted FTS granularity from index metadata and adds
+        // _doc_index to element results. Retain it after our final projection,
+        // including for schema inspection, without guessing or replanning.
+        projection.output.preserve_doc_index = self.text;
         if self.hybrid {
             projection.selection = projection.hybrid_selection();
             if !self.with_row_id {
-                if let Some(columns) = &mut projection.output {
+                if let Some(columns) = &mut projection.output.columns {
                     columns.retain(|(_, name)| name != "_rowid");
                 }
             }
@@ -136,7 +157,7 @@ impl ProjectionRequest {
             }
             Ok(Projection {
                 selection: Some(Select::Dynamic(selected)),
-                output: Some(output),
+                output: Some(output).into(),
             })
         } else if let Some(mut columns) = self.columns {
             for name in metadata {
@@ -155,12 +176,12 @@ impl ProjectionRequest {
             }
             Ok(Projection {
                 selection: Some(Select::Columns(columns)),
-                output: Some(output),
+                output: Some(output).into(),
             })
         } else {
             Ok(Projection {
                 selection: None,
-                output: None,
+                output: OutputProjection::default(),
             })
         }
     }
@@ -170,7 +191,7 @@ impl Projection {
     // The SDK adds query_index after each scanner. A singleton never enters
     // that SDK branch, so produce the same Int32 metadata as a constant instead.
     pub(crate) fn batch(mut self, schema: &Schema, singleton: bool) -> Self {
-        if let Some(output) = &mut self.output {
+        if let Some(output) = &mut self.output.columns {
             if !output.iter().any(|(_, name)| name == "query_index") {
                 output.push(("query_index".into(), "query_index".into()));
             }
@@ -239,10 +260,18 @@ pub(crate) fn project(
     batch: RecordBatch,
     output: &OutputProjection,
 ) -> Result<RecordBatch, Failure> {
-    let Some(output) = output else {
+    let Some(columns) = &output.columns else {
         return Ok(batch);
     };
     let schema = batch.schema();
+    let mut columns = columns.clone();
+    if output.preserve_doc_index
+        && schema.field_with_name("_doc_index").is_ok()
+        && !columns.iter().any(|(_, name)| name == "_doc_index")
+    {
+        columns.push(("_doc_index".into(), "_doc_index".into()));
+    }
+    let output = &columns;
     let indices = output
         .iter()
         .map(|(source, _)| schema.index_of(source))

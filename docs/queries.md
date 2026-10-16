@@ -218,7 +218,8 @@ name. Quote SQL identifiers with backticks when their names contain
 punctuation.
 
 Search results include `_distance`, `_score`, or `_relevance_score` by default.
-They also include `_rowid` when requested. Computed aliases cannot use these
+They also include `_rowid` when requested and `_doc_index` for
+[list-element FTS](search.md#searching-individual-list-elements). Computed aliases cannot use these
 metadata names. Hybrid expressions execute in both search channels. Use
 stored columns in hybrid expressions. Channel scores and the relevance score
 from fusion are not available to those expressions.
@@ -262,7 +263,7 @@ that execute before fusion.
 
 Ranking and pagination keep their existing behavior. Custom rerankers continue to receive
 channel scores and row IDs; this option controls only the final result.
-It does not change `:with_row_id` or the `query_index` discriminator in batch
+It does not change `:with_row_id`, element FTS `_doc_index`, or the `query_index` discriminator in batch
 searches. Scans and direct retrieval accept it without changing their results.
 The value must be a boolean; explicit `nil` is invalid.
 

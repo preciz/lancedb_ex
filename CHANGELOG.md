@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add list-element full-text indexes and match/phrase queries with public nested
+  field paths. Preserve `_doc_index` through projections, streams and schema
+  inspection, propagate granularity through prepared queries, support saved
+  analyzer lookup beneath lists, and reject element hits in hybrid fusion.
 - Add SQL computed-column declarations, explicit refresh and typed refresh jobs.
   Use writable-only input schemas for row and Arrow ingestion, merges and upserts;
   expose `Table.write_schema/1`, preserve declaration and freshness metadata, and

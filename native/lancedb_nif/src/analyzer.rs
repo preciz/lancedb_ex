@@ -11,29 +11,47 @@ pub(crate) async fn saved_analyzer(
 ) -> Result<FtsIndexBuilder, Failure> {
     let column = match selector {
         "index" => None,
-        "column" => {
-            let arrow = table.schema().await.map_err(Failure::from_error)?;
-            let schema =
-                lance::datatypes::Schema::try_from(arrow.as_ref()).map_err(Failure::from_error)?;
-            lance::datatypes::parse_field_path(name).map_err(Failure::from_error)?;
-            let fields = schema
-                .resolve_case_insensitive(name)
-                .ok_or_else(|| format!("Field path '{name}' not found in schema"))?;
-            let names: Vec<_> = fields.iter().map(|field| field.name.as_str()).collect();
-            Some(lance::datatypes::format_field_path(&names))
-        }
+        "column" => Some(lance::datatypes::parse_field_path(name).map_err(Failure::from_error)?),
         _ => return Err("Invalid tokenizer selector".into()),
     };
     let indices = table.list_indices().await.map_err(Failure::from_error)?;
+    // FTS listings already expose public paths, omitting internal list-item
+    // fields. Resolve against those instead of the generic struct-only schema
+    // resolver. Parsing keeps quoted names distinct from nested field paths.
+    let column = column.map(|requested| {
+        let paths: Vec<_> = indices
+            .iter()
+            .filter(|index| index.index_type == IndexType::FTS && index.columns.len() == 1)
+            .filter_map(|index| {
+                lance::datatypes::parse_field_path(&index.columns[0])
+                    .ok()
+                    .map(|path| (index.columns[0].clone(), path))
+            })
+            .collect();
+        paths
+            .iter()
+            .find(|(_, path)| *path == requested)
+            .or_else(|| {
+                paths.iter().find(|(_, path)| {
+                    path.len() == requested.len()
+                        && path
+                            .iter()
+                            .zip(&requested)
+                            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+                })
+            })
+            .map(|(path, _)| path.clone())
+    });
     let matches: Vec<_> = indices
         .iter()
         .filter(|index| match &column {
             None => index.name == name,
-            Some(column) => {
+            Some(Some(column)) => {
                 index.index_type == IndexType::FTS
                     && index.columns.len() == 1
                     && index.columns[0] == *column
             }
+            Some(None) => false,
         })
         .collect();
     let description = format!("{selector} '{name}'");

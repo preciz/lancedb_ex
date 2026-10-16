@@ -1,6 +1,6 @@
 //! FTS build controls are separate from reusable text analysis.
 use crate::error::Failure;
-use lance_index::scalar::inverted::InvertedListFormatVersion;
+use lance_index::scalar::inverted::{DocumentGranularity, InvertedListFormatVersion};
 use lancedb::index::scalar::FtsIndexBuilder;
 
 #[derive(Default, serde::Deserialize)]
@@ -9,10 +9,14 @@ pub(crate) struct FtsBuildOptions {
     memory_limit_mb: Option<u64>,
     num_workers: Option<usize>,
     format_version: Option<String>,
+    document_granularity: Option<DocumentGranularity>,
 }
 
 impl FtsBuildOptions {
     pub(crate) fn apply(self, mut builder: FtsIndexBuilder) -> Result<FtsIndexBuilder, Failure> {
+        if let Some(value) = self.document_granularity {
+            builder = builder.document_granularity(value);
+        }
         if let Some(v) = self.block_size {
             builder = builder.block_size(v).map_err(Failure::from_error)?;
         }

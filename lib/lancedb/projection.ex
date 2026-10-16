@@ -2,7 +2,7 @@ defmodule LanceDB.Projection do
   @moduledoc false
   import LanceDB.Options, only: [column_names!: 1, column_name!: 1]
 
-  @reserved ~w(_rowid _rowoffset _rowaddr _distance _score _relevance_score query_index)
+  @reserved ~w(_rowid _rowoffset _rowaddr _distance _score _relevance_score _doc_index query_index)
 
   @spec options!(keyword()) :: %{columns: [String.t()] | nil, select: [[String.t()]] | nil}
   def options!(opts) do

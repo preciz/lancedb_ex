@@ -109,7 +109,11 @@ defmodule LanceDB.Index do
   splitting flags; see the [analyzer guide](search.md#configurable-fts-analyzers)).
   FTS build controls are `:block_size` (128/256),
   positive uint32 `:memory_limit_mb` and `:num_workers`, and `:format_version`
-  (`:v1`, `:v2`, `:v3`). Code tokenization and 256-document blocks require V3;
+  (`:v1`, `:v2`, `:v3`). `:document_granularity` accepts `:row` (the default)
+  or `:list_element` to index individual text elements beneath one or more
+  variable-length lists. Use public nested paths such as `"docs.content"`.
+  Element search results include `_doc_index`; see `LanceDB.FTS`.
+  Code tokenization and 256-document blocks require V3;
   omitted format selects it automatically when needed. Explicit scalar indexes accept `train: false`
   to create an empty index. Vector indexes require training
   data; their distance must match the distance used for search.

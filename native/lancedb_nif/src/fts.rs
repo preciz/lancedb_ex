@@ -2,8 +2,8 @@ use crate::analyzer::{fts_builder, saved_analyzer, FtsAnalyzer};
 use crate::error::Failure;
 use crate::resources::TableResource;
 use lancedb::index::scalar::{
-    BooleanQuery, BoostQuery, FtsQuery, FullTextSearchQuery, MatchQuery, MultiMatchQuery, Operator,
-    PhraseQuery,
+    BooleanQuery, BoostQuery, DocumentGranularity, FtsQuery, FullTextSearchQuery, MatchQuery,
+    MultiMatchQuery, Operator, PhraseQuery,
 };
 use lancedb::index::IndexType;
 use rustler::{Atom, Env, ResourceArc, Term};
@@ -28,11 +28,13 @@ pub(crate) enum StructuredQuery {
         fuzziness: u32,
         max_expansions: usize,
         prefix_length: u32,
+        document_granularity: Option<DocumentGranularity>,
     },
     Phrase {
         text: String,
         column: Option<String>,
         slop: u32,
+        document_granularity: Option<DocumentGranularity>,
     },
     MultiMatch {
         text: String,
@@ -129,8 +131,9 @@ impl StructuredQuery {
                 fuzziness,
                 max_expansions,
                 prefix_length,
-            } => FtsQuery::Match(
-                MatchQuery::new(text.clone())
+                document_granularity,
+            } => {
+                let mut query = MatchQuery::new(text.clone())
                     .with_column(column(name))
                     .with_operator(
                         Operator::try_from(operator.as_str()).map_err(Failure::from_error)?,
@@ -138,17 +141,22 @@ impl StructuredQuery {
                     .with_boost(*boost)
                     .with_fuzziness(Some(*fuzziness))
                     .with_max_expansions(*max_expansions)
-                    .with_prefix_length(*prefix_length),
-            ),
+                    .with_prefix_length(*prefix_length);
+                query.document_granularity = *document_granularity;
+                FtsQuery::Match(query)
+            }
             Self::Phrase {
                 text,
                 column: name,
                 slop,
-            } => FtsQuery::Phrase(
-                PhraseQuery::new(text.clone())
+                document_granularity,
+            } => {
+                let mut query = PhraseQuery::new(text.clone())
                     .with_column(column(name))
-                    .with_slop(*slop),
-            ),
+                    .with_slop(*slop);
+                query.document_granularity = *document_granularity;
+                FtsQuery::Phrase(query)
+            }
             Self::MultiMatch {
                 text,
                 columns,

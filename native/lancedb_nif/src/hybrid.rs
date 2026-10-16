@@ -121,7 +121,7 @@ impl HybridResultPlan {
                 // Explicit projections already encode the caller's score choice.
                 // With no projection, omit only the automatically added score.
                 !self.read.disable_scoring_autoprojection
-                    || self.projection.is_some()
+                    || self.projection.columns.is_some()
                     || field.name() != "_relevance_score"
             })
             .map(|(i, _)| i)
@@ -156,7 +156,7 @@ fn candidate_json(
     let schema = batches.first().ok_or("Missing channel schema")?.schema();
     let batch = arrow::compute::concat_batches(&schema, batches).map_err(Failure::from_error)?;
     let batch = crate::ranking::normalize(batch, score, plan.controls.normalize == "rank")?;
-    let projection = plan.projection.as_ref().map(|columns| {
+    let projection = plan.projection.columns.as_ref().map(|columns| {
         let mut columns: Vec<_> = columns
             .iter()
             .filter(|(_, name)| !["_rowid", "_relevance_score"].contains(&name.as_str()))
@@ -166,7 +166,7 @@ fn candidate_json(
         columns.push((score.into(), score.into()));
         columns
     });
-    crate::codec::batches_to_json(vec![project(batch, &projection)?])
+    crate::codec::batches_to_json(vec![project(batch, &projection.into())?])
 }
 
 // Execute both channels and align their data columns, including empty results,
@@ -191,6 +191,21 @@ pub(crate) async fn hybrid_queries(
         )
         .with_row_id()
         .limit(limit);
+    // Fusion deduplicates by parent row ID. Element hits can repeat that ID
+    // and have no corresponding vector candidate, so fail before either
+    // channel executes. Inspect the actual plan to include inferred granularity.
+    if text
+        .output_schema()
+        .await
+        .map_err(Failure::from_error)?
+        .field_with_name("_doc_index")
+        .is_ok()
+    {
+        return Err(Failure::new(
+            "unsupported",
+            "Hybrid search requires row-granularity FTS; list-element matches cannot be fused by parent row ID",
+        ));
+    }
     if let Some(filter) = filter {
         text = text.only_if(filter);
     }

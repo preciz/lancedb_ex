@@ -312,6 +312,72 @@ LanceDB 0.40.0 still treats that setting as exact matching at its public query
 planning boundary. Set edit distances and
 expansion limits explicitly.
 
+## Searching individual list elements
+
+Use `document_granularity: :list_element` to index and search separate text
+documents within each parent record. Lists of strings, lists of structs, and
+nested variable-length lists are supported. Use public field paths such as
+`"docs.content"`; do not insert Arrow's internal `item` segments.
+
+```elixir
+alias LanceDB.{Connection, FTS, Index, Query}
+
+{:ok, table} = Connection.create_table(db, "articles", [
+  %{id: 1, docs: [%{content: "Elixir concurrency"}, %{content: "Elixir streams"}]},
+  %{id: 2, docs: [%{content: "Other languages"}]}
+], schema: [id: :int64, docs: {:list, {:struct, content: :string}}])
+
+{:ok, :created} = Index.create(table, "docs.content",
+  type: :fts,
+  document_granularity: :list_element,
+  analyzer: [with_position: true, stem: false, remove_stop_words: false])
+
+text = FTS.match("elixir", column: "docs.content",
+  document_granularity: :list_element)
+
+{:ok, hits} = Query.full_text_search(table, text,
+  columns: [:id], with_row_id: true)
+# Two hits for id 1, with the same parent _rowid and _doc_index [0] and [1].
+```
+
+Each matching element is a separate result. `_doc_index` is a list of zero-based
+coordinates, one per traversed list, in outermost-to-innermost order. For example,
+`[1, 3]` identifies element 3 inside outer element 1. Null and empty containers
+produce no documents; skipped null elements retain their original positions.
+Use the pair of parent `_rowid` and `_doc_index` to identify a hit. Requested
+stored fields contain the parent record's values, rather than only the matched
+element. Row IDs have the usual table-version and compaction constraints.
+
+`_doc_index` is retained with `:columns`, computed `:select`, row streams,
+Arrow batch streams, `Query.schema/1`, and `disable_scoring_autoprojection: true`.
+It is a reserved computed projection alias. Limit and offset count element
+hits. Filters apply to the parent row; a SQL filter is not scoped to just the
+matched element. Explicit ordering supports the usual stored columns and
+scores. Ordering by `_doc_index` is unsupported in the pinned SDK; ties among
+element hits are not guaranteed to have coordinate order.
+
+`FTS.phrase/2` accepts the same granularity option. Boolean and boost queries
+combine hits by their parent row and element coordinates: all leaves must
+target the same final text field and resolve to the same granularity.
+Prepared matches propagate the option to every generated exact/fuzzy leaf.
+Saved analyzer preparation accepts the public nested field path or index name.
+`FTS.multi_match/3` and hybrid search require row granularity; hybrid RRF and
+custom rerankers reject element hits before candidate execution.
+
+New indexes default to `:row`. Omitting the setting on a query preserves SDK
+inference: a unique indexed granularity determines the search, including scans
+of newly appended rows. With no index, the default is `:row`; explicit element
+match/phrase queries can scan an unindexed field. If both index granularities
+exist for one field, choose one explicitly on every leaf. An explicit request
+cannot contradict the only indexed granularity. For ordinary string queries,
+supply `text_column:` when searching an element index; structured queries also
+support the existing unique-column inference.
+
+The usual index lifecycle applies, including reusable definitions, asynchronous
+creation, readiness waiting, and optimization after writes. `fast_search: true`
+excludes unindexed fragments. Fuzzy queries retain the existing vocabulary
+limitations described above.
+
 ## Preparing exact and fuzzy terms
 
 `FTS.prepare/2` and `/3` analyze plain text once and return a reusable

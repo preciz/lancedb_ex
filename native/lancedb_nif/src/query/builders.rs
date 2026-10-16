@@ -109,6 +109,16 @@ async fn prepare_text(
     filter: Option<String>,
     wand_factor: Option<f32>,
 ) -> Result<PreparedQuery, Failure> {
+    if options
+        .order_by
+        .iter()
+        .any(|(column, _, _)| column == "_doc_index")
+    {
+        return Err(Failure::new(
+            "unsupported",
+            "Ordering by _doc_index is not supported by LanceDB 0.40.0; order by stored columns or scores",
+        ));
+    }
     let fts = text
         .build(table, column.as_deref())
         .await?
