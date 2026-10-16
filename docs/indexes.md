@@ -52,6 +52,7 @@ Each index covers one column. Supported types:
 - `:bitmap`: scalar columns with few distinct values.
 - `:label_list`: list membership filters with `array_has_any` and `array_has_all`.
 - `:fm`: case-sensitive substring filters with `contains`, including parts of words.
+- `:zonemap`: scalar filters using min/max summaries to skip ranges of rows.
 - `:ivf_flat`: partitioned vector search without product quantization.
 - `:ivf_pq`: partitioned vector search with product quantization.
 - `:ivf_sq`: partitioned vector search with 8-bit scalar quantization.
@@ -61,7 +62,7 @@ Each index covers one column. Supported types:
 - `:hnsw_sq`: HNSW graphs within IVF partitions, with 8-bit scalar quantization.
 - `:fts`: tokenized full-text search on string columns.
 
-Choose `:label_list` and `:fm` explicitly. `:auto` does not select them.
+Choose `:label_list`, `:fm`, and `:zonemap` explicitly. `:auto` does not select them.
 LabelList supports scalar list elements such as strings and integers. FM
 supports the package's string columns. It does not tokenize or normalize
 text. Both types support naming, replacement, statistics, prewarming,
@@ -76,6 +77,27 @@ optimization, and deletion APIs.
 {:ok, :created} = LanceDB.Index.create(table, :text, type: :fm)
 {:ok, rows} = LanceDB.Query.query(table, filter: "contains(text, 'ixir')")
 ```
+
+Zone maps work best when nearby rows have similar values, such as timestamps
+in time-ordered data. They store minimum and maximum values for ranges of rows;
+queries skip ranges that cannot match and check candidate rows against the
+filter. Results remain exact, including rows appended after index creation.
+Widely mixed values can limit how much data the index skips.
+
+```elixir
+# A table with timestamp: {:timestamp, :microsecond}:
+{:ok, :created} = LanceDB.Index.create(table, :timestamp, type: :zonemap)
+{:ok, rows} = LanceDB.Query.query(table,
+  filter: "timestamp >= TIMESTAMP '2026-01-01 00:00:00'"
+)
+```
+
+Zone maps support integer, floating-point, boolean, string, binary, fixed-size
+binary, date, time, and timestamp columns, including `:large_string` and
+`:large_binary`. They have no type-specific options. The usual `:name`,
+`:replace`, and `:train` controls apply, as do asynchronous creation,
+statistics, prewarming, optimization, and deletion. `Index.list/1` and
+`Index.stats/2` report the type as `"ZONEMAP"`.
 
 LanceDB checks scalar type compatibility and vector training requirements.
 All seven vector index types accept these options:

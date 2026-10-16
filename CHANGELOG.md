@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add explicit `:zonemap` scalar indexes with synchronous and asynchronous
+  creation, reusable definitions, and empty-index creation via `train: false`.
+
 ## 0.4.0
 
 - Clarify table cache success and structured error return values, including

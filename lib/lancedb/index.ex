@@ -76,11 +76,13 @@ defmodule LanceDB.Index do
   @doc """
   Creates an index on one column, returning `{:ok, :created}` after completion.
 
-  Types: `:auto` (default), `:btree`, `:bitmap`, `:label_list`, `:fm`, `:ivf_flat`, `:ivf_pq`,
+  Types: `:auto` (default), `:btree`, `:bitmap`, `:label_list`, `:fm`, `:zonemap`, `:ivf_flat`, `:ivf_pq`,
   `:ivf_sq`, `:ivf_rq`, `:hnsw_flat`, `:hnsw_pq`, `:hnsw_sq`, `:fts`.
   `:label_list` accelerates `array_has_any`/`array_has_all` on lists;
   `:fm` accelerates `contains(column, 'substring')` on strings.
-  Neither is selected by `:auto`; choose its type explicitly.
+  `:zonemap` uses min/max summaries of row ranges to prune scalar filters,
+  especially on columns whose nearby rows have similar values. It has no
+  type-specific options. These three types must be selected explicitly.
   Options: `:name`, `:replace` (default false), and, for vector indexes,
   `:distance` (`:l2`, `:cosine`, `:dot`, or `:hamming` for uint8 vectors), `:num_partitions` or
   `:target_partition_size` (mutually exclusive), `:sample_rate` (SDK default 256),

@@ -72,7 +72,10 @@ fn index_builder(
     options: String,
 ) -> Result<lancedb::index::IndexBuilder, Failure> {
     use lancedb::index::{
-        scalar::{BTreeIndexBuilder, BitmapIndexBuilder, FmIndexBuilder, LabelListIndexBuilder},
+        scalar::{
+            BTreeIndexBuilder, BitmapIndexBuilder, FmIndexBuilder, LabelListIndexBuilder,
+            ZoneMapIndexBuilder,
+        },
         vector::{
             IvfFlatIndexBuilder, IvfHnswFlatIndexBuilder, IvfHnswPqIndexBuilder,
             IvfHnswSqIndexBuilder, IvfPqIndexBuilder, IvfRqIndexBuilder, IvfSqIndexBuilder,
@@ -117,6 +120,7 @@ fn index_builder(
         "bitmap" => Index::Bitmap(BitmapIndexBuilder::default()),
         "label_list" => Index::LabelList(LabelListIndexBuilder::default()),
         "fm" => Index::Fm(FmIndexBuilder::default()),
+        "zonemap" => Index::ZoneMap(ZoneMapIndexBuilder::default()),
         "ivf_flat" => vector_index!(IvfFlat, IvfFlatIndexBuilder),
         "ivf_sq" => vector_index!(IvfSq, IvfSqIndexBuilder),
         "ivf_rq" => vector_index!(IvfRq, IvfRqIndexBuilder, num_bits => num_bits),
