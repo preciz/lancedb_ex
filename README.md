@@ -12,7 +12,8 @@ The [selected native build](docs/installation.md#current-native-build) passed
 public download and production release checks on Linux x86_64, Linux ARM64,
 and Apple Silicon macOS, including supervised table caching, shared cache
 connections, background FTS warming, shared cache reuse, FTS query preparation,
-and standard table optimization.
+and standard table optimization. These binaries include the Rustls 0.23.46
+security fixes.
 
 ## Requirements
 

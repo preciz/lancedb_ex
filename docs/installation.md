@@ -66,14 +66,15 @@ release.
 ### Current native build
 
 The selected native build is
-[`0.0.0+024163b8be984074a8834f67925ba09f37002ad0`](https://github.com/preciz/lancedb_ex/releases/tag/native-024163b8be984074a8834f67925ba09f37002ad0).
+[`0.0.0+cb917f97b7878c5350f6da695b8c94e5b3a9f75c`](https://github.com/preciz/lancedb_ex/releases/tag/native-cb917f97b7878c5350f6da695b8c94e5b3a9f75c).
 Its exact source revision is
-[`024163b8be984074a8834f67925ba09f37002ad0`](https://github.com/preciz/lancedb_ex/commit/024163b8be984074a8834f67925ba09f37002ad0).
+[`cb917f97b7878c5350f6da695b8c94e5b3a9f75c`](https://github.com/preciz/lancedb_ex/commit/cb917f97b7878c5350f6da695b8c94e5b3a9f75c).
 It uses SDK `0.40.0` and NIF ABI `2.15`.
+The binaries include Rustls `0.23.46` and ChaCha20 `0.10.2`.
 
 All three targets passed their Rust and Elixir tests, including computed-column
 refresh jobs, scalar indexes, scoring controls, and list-element FTS. The
-[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38910712274)
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38918661882)
 also checked fresh consumers on all three targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
 and completed a write and query without Rust or credentials. The checks also
