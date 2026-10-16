@@ -214,8 +214,8 @@ After all checks pass, tag and push the package source, then run the release
 script from that checkout:
 
 ```sh
-git tag -a v0.4.0 -m "Release v0.4.0"
-git push origin main v0.4.0
+git tag -a v0.5.0 -m "Release v0.5.0"
+git push origin main v0.5.0
 elixir scripts/release.exs
 ```
 

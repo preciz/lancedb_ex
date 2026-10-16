@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Add list-element full-text indexes and match/phrase queries with public nested
   field paths. Preserve `_doc_index` through projections, streams and schema
@@ -27,6 +27,16 @@
   fallback bug.
 - Add explicit `:zonemap` scalar indexes with synchronous and asynchronous
   creation, reusable definitions, and empty-index creation via `train: false`.
+
+The LanceDB SDK remains at 0.40.0 and Lance at 13.0.0. This release selects new
+verified native binaries for Linux x86_64, Linux ARM64, and Apple Silicon macOS
+containing these features. Normal installation downloads the selected binary
+without compiling Rust.
+
+### Breaking changes
+
+- Reserve `_doc_index` as a computed projection alias for list-element FTS
+  metadata. Rename any existing `select:` alias using this name.
 
 ## 0.4.0
 

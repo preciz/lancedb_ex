@@ -6,7 +6,7 @@ This package embeds [LanceDB](https://lancedb.com/) in Elixir through Rustler.
 Use local files or S3-compatible object storage. A database server is not
 necessary. Supply your own vector embeddings.
 
-The Elixir package version is `0.4.0`. The Rust software development kit
+The Elixir package version is `0.5.0`. The Rust software development kit
 (SDK) is pinned to `0.40.0`. Each native build has a separate immutable ID.
 The [selected native build](docs/installation.md#current-native-build) passed
 public download and production release checks on Linux x86_64, Linux ARM64,
@@ -30,7 +30,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.4.0"}
+    {:lancedb_ex, "~> 0.5.0"}
   ]
 end
 ```
@@ -126,11 +126,11 @@ capacity controls and consistency guarantees.
 | --- | --- |
 | [API guide](docs/api.md) | Handles, query defaults, errors, records, and telemetry. |
 | [Queries](docs/queries.md) | Filters, expressions, projections, direct retrieval, timeouts, diagnostics, and vector search. |
-| [Full-text and hybrid search](docs/search.md) | Text queries, analyzers, ranking callbacks, and result ordering. |
+| [Full-text and hybrid search](docs/search.md) | Text and list-element queries, analyzers, ranking callbacks, and result ordering. |
 | [Writes and streaming](docs/writes.md) | Input sources, appends, updates, merges, streams, progress, and backfills. |
-| [Schemas and data types](docs/schema.md) | Explicit schemas, nested values, blobs, timestamps, schema changes, and metadata. |
+| [Schemas and data types](docs/schema.md) | Explicit schemas, nested values, blobs, timestamps, computed columns, schema changes, and metadata. |
 | [Indexes](docs/indexes.md) | Index types, training, search tuning, readiness, and native jobs. |
-| [Table operations](docs/tables.md) | Statistics, history, tags, branches, clones, table options, and maintenance. |
+| [Table operations](docs/tables.md) | Statistics, primary key declarations, history, tags, branches, clones, table options, and maintenance. |
 | [Table caching](docs/table-cache.md) | Optional supervision, shared handles, background warming, limits, and invalidation. |
 | [Installation and storage](docs/installation.md) | Native artifacts, authentication, deployment, offline builds, and S3 configuration. |
 | [Development and tests](docs/development.md) | Local checks, StreamData properties, coverage, and MinIO tests. |

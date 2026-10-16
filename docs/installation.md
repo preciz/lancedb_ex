@@ -36,7 +36,7 @@ Add the package to `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:lancedb_ex, "~> 0.4.0"}
+    {:lancedb_ex, "~> 0.5.0"}
   ]
 end
 ```
@@ -53,7 +53,7 @@ tree entry. Applications using the optional [table cache](table-cache.md)
 supervise that component themselves.
 The Hex package and OTP application use the name `lancedb_ex`.
 [native-build.exs](https://github.com/preciz/lancedb_ex/blob/main/native-build.exs) records the native build ID, exact source revision, and
-default artifact URL. The Elixir package version is `0.4.0`, and the
+default artifact URL. The Elixir package version is `0.5.0`, and the
 package uses SDK `0.40.0`. These versions do not identify the
 wrapper binary. Each native build has the SemVer version
 `0.0.0+<full-source-revision>`.
@@ -66,13 +66,14 @@ release.
 ### Current native build
 
 The selected native build is
-[`0.0.0+beb797032e4d297ec4024b6f96989883ed269beb`](https://github.com/preciz/lancedb_ex/releases/tag/native-beb797032e4d297ec4024b6f96989883ed269beb).
+[`0.0.0+024163b8be984074a8834f67925ba09f37002ad0`](https://github.com/preciz/lancedb_ex/releases/tag/native-024163b8be984074a8834f67925ba09f37002ad0).
 Its exact source revision is
-[`beb797032e4d297ec4024b6f96989883ed269beb`](https://github.com/preciz/lancedb_ex/commit/beb797032e4d297ec4024b6f96989883ed269beb).
+[`024163b8be984074a8834f67925ba09f37002ad0`](https://github.com/preciz/lancedb_ex/commit/024163b8be984074a8834f67925ba09f37002ad0).
 It uses SDK `0.40.0` and NIF ABI `2.15`.
 
-All three targets passed their Rust and Elixir tests. The
-[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38758819548)
+All three targets passed their Rust and Elixir tests, including computed-column
+refresh jobs, scalar indexes, scoring controls, and list-element FTS. The
+[publication workflow](https://github.com/preciz/lancedb_ex/actions/runs/38910712274)
 also checked fresh consumers on all three targets. Each consumer downloaded the
 archive from the public default URL, checked its checksum, loaded the NIF,
 and completed a write and query without Rust or credentials. The checks also
@@ -84,7 +85,7 @@ optimization, and a production application release on each target.
 To use the released source with its verified archives, pin the Git dependency:
 
 ```elixir
-{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.4.0"}
+{:lancedb_ex, github: "preciz/lancedb_ex", tag: "v0.5.0"}
 ```
 
 Then run `mix deps.get` and `mix compile`. This installation uses the
