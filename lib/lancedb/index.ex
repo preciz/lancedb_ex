@@ -77,7 +77,7 @@ defmodule LanceDB.Index do
   Creates an index on one column, returning `{:ok, :created}` after completion.
 
   Types: `:auto` (default), `:btree`, `:bitmap`, `:label_list`, `:fm`, `:zonemap`, `:ngram`,
-  `:ivf_flat`, `:ivf_pq`, `:ivf_sq`, `:ivf_rq`, `:hnsw_flat`, `:hnsw_pq`, `:hnsw_sq`, `:fts`.
+  `:bloom_filter`, `:ivf_flat`, `:ivf_pq`, `:ivf_sq`, `:ivf_rq`, `:hnsw_flat`, `:hnsw_pq`, `:hnsw_sq`, `:fts`.
   `:label_list` accelerates `array_has_any`/`array_has_all` on lists;
   `:fm` accelerates `contains(column, 'substring')` on strings.
   `:zonemap` uses min/max summaries of row ranges to prune scalar filters,
@@ -87,11 +87,16 @@ defmodule LanceDB.Index do
   `:large_string` columns. Candidate rows are rechecked against the original
   filter; patterns without useful trigrams can require a scan. It has no
   type-specific options and is separate from the FTS n-gram analyzer.
-  Select `:label_list`, `:fm`, `:zonemap`, and `:ngram` explicitly.
+  `:bloom_filter` skips groups of rows for equality, `IN`, and null filters;
+  candidate rows are rechecked, keeping results exact. It accepts
+  `:number_of_items` (rows per filter, a positive uint64) and `:probability`
+  (false-positive target, a finite number strictly between 0 and 1).
+  Omitted settings use SDK defaults, normally 8192 rows and probability 0.00057.
+  Select `:label_list`, `:fm`, `:zonemap`, `:ngram`, and `:bloom_filter` explicitly.
   Options: `:name`, `:replace` (default false), and, for vector indexes,
   `:distance` (`:l2`, `:cosine`, `:dot`, or `:hamming` for uint8 vectors), `:num_partitions` or
   `:target_partition_size` (mutually exclusive), `:sample_rate` (SDK default 256),
-  and `:max_iterations` (SDK default 50). Counts must be positive uint32 integers.
+  and `:max_iterations` (SDK default 50). Vector counts must be positive uint32 integers.
   `:ivf_pq` and `:hnsw_pq` also accept `:num_sub_vectors`. HNSW types accept
   `:m` (graph neighbors, SDK default 20) and `:ef_construction` (build
   candidates, SDK default 300). All HNSW types use IVF partitions.

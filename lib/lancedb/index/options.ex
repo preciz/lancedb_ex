@@ -1,7 +1,7 @@
 defmodule LanceDB.Index.Options do
   alias LanceDB.Index.FTSOptions
   @moduledoc false
-  @scalar_types [:btree, :bitmap, :label_list, :fm, :zonemap, :ngram, :fts]
+  @scalar_types [:btree, :bitmap, :label_list, :fm, :zonemap, :ngram, :bloom_filter, :fts]
   @vector_types [:ivf_flat, :ivf_pq, :ivf_sq, :ivf_rq, :hnsw_flat, :hnsw_pq, :hnsw_sq]
   @hnsw_types [:hnsw_flat, :hnsw_pq, :hnsw_sq]
   @training_options [:num_partitions, :sample_rate, :max_iterations, :target_partition_size]
@@ -26,6 +26,8 @@ defmodule LanceDB.Index.Options do
           :num_bits,
           :m,
           :ef_construction,
+          :number_of_items,
+          :probability,
           :analyzer
         ] ++ FTSOptions.keys()
       )
@@ -51,6 +53,7 @@ defmodule LanceDB.Index.Options do
     validate_vector_options!(opts, type)
     validate_counts!(opts)
     validate_quantization!(opts, type)
+    validate_bloom_options!(opts, type)
 
     if Keyword.has_key?(opts, :analyzer) and type != :fts,
       do: raise(ArgumentError, "analyzer options require an FTS index")
@@ -74,6 +77,8 @@ defmodule LanceDB.Index.Options do
       num_bits: Keyword.get(opts, :num_bits),
       m: Keyword.get(opts, :m),
       ef_construction: Keyword.get(opts, :ef_construction),
+      number_of_items: Keyword.get(opts, :number_of_items),
+      probability: Keyword.get(opts, :probability),
       analyzer: analyzer,
       fts: FTSOptions.parse!(opts, type)
     }
@@ -135,5 +140,24 @@ defmodule LanceDB.Index.Options do
            rem(Keyword.get(opts, :num_sub_vectors, 2), 2) != 0,
          do: raise(ArgumentError, "4-bit PQ requires an even num_sub_vectors")
     end
+  end
+
+  defp validate_bloom_options!(opts, type) do
+    values = Keyword.take(opts, [:number_of_items, :probability])
+
+    if type != :bloom_filter and values != [],
+      do: raise(ArgumentError, "Bloom filter options require type: :bloom_filter")
+
+    Enum.each(values, &validate_bloom_option!/1)
+  end
+
+  defp validate_bloom_option!({:number_of_items, count}) do
+    if !(is_integer(count) and count > 0 and count <= 18_446_744_073_709_551_615),
+      do: raise(ArgumentError, "number_of_items must be a positive uint64 integer")
+  end
+
+  defp validate_bloom_option!({:probability, probability}) do
+    if !(is_number(probability) and probability > 0 and probability < 1),
+      do: raise(ArgumentError, "probability must be a finite number strictly between 0 and 1")
   end
 end

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit `:bloom_filter` scalar indexes for equality, membership, and null
+  filters, with per-filter row counts, false-positive targets, and the existing
+  synchronous, asynchronous, and maintenance APIs.
 - Add explicit `:ngram` indexes for substring, `LIKE`, and supported regular-expression
   filters on string and large-string columns, with the existing index lifecycle
   and asynchronous creation APIs. Preserve matches for untokenizable Unicode,

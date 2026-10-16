@@ -61,6 +61,8 @@ struct IndexOptions {
     num_bits: Option<u32>,
     m: Option<u32>,
     ef_construction: Option<u32>,
+    number_of_items: Option<u64>,
+    probability: Option<f64>,
     analyzer: Option<FtsAnalyzer>,
     #[serde(default)]
     fts: crate::index_fts::FtsBuildOptions,
@@ -73,8 +75,8 @@ fn index_builder(
 ) -> Result<lancedb::index::IndexBuilder, Failure> {
     use lancedb::index::{
         scalar::{
-            BTreeIndexBuilder, BitmapIndexBuilder, FmIndexBuilder, LabelListIndexBuilder,
-            NGramIndexBuilder, ZoneMapIndexBuilder,
+            BTreeIndexBuilder, BitmapIndexBuilder, BloomFilterIndexBuilder, FmIndexBuilder,
+            LabelListIndexBuilder, NGramIndexBuilder, ZoneMapIndexBuilder,
         },
         vector::{
             IvfFlatIndexBuilder, IvfHnswFlatIndexBuilder, IvfHnswPqIndexBuilder,
@@ -122,6 +124,18 @@ fn index_builder(
         "fm" => Index::Fm(FmIndexBuilder::default()),
         "zonemap" => Index::ZoneMap(ZoneMapIndexBuilder::default()),
         "ngram" => Index::NGram(NGramIndexBuilder::default()),
+        "bloom_filter" => {
+            let mut builder = BloomFilterIndexBuilder::default();
+            if let Some(value) = opts.number_of_items {
+                builder = builder
+                    .number_of_items(value)
+                    .map_err(Failure::from_error)?;
+            }
+            if let Some(value) = opts.probability {
+                builder = builder.probability(value).map_err(Failure::from_error)?;
+            }
+            Index::BloomFilter(builder)
+        }
         "ivf_flat" => vector_index!(IvfFlat, IvfFlatIndexBuilder),
         "ivf_sq" => vector_index!(IvfSq, IvfSqIndexBuilder),
         "ivf_rq" => vector_index!(IvfRq, IvfRqIndexBuilder, num_bits => num_bits),
@@ -282,4 +296,54 @@ fn prewarm_index(
             .map_err(Failure::from_error)?;
         Ok(atoms::prewarmed())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::{ArrayRef, Int64Array, RecordBatch};
+    use std::sync::Arc;
+
+    #[test]
+    fn bloom_filter_tuning_is_persisted_by_the_sdk() {
+        crate::resources::RUNTIME.block_on(async {
+            let conn = lancedb::connect("memory://").execute().await.unwrap();
+            for (index, (count, probability)) in
+                [(Some(4), Some(0.25)), (None, Some(0.01)), (Some(16), None)]
+                    .into_iter()
+                    .enumerate()
+            {
+                let name = format!("bloom_{index}");
+                let batch = RecordBatch::try_from_iter([(
+                    "id",
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as ArrayRef,
+                )])
+                .unwrap();
+                let table = conn.create_table(&name, batch).execute().await.unwrap();
+                let options = serde_json::json!({
+                    "type": "bloom_filter", "name": "ids", "replace": false,
+                    "train": true, "distance": "l2",
+                    "number_of_items": count, "probability": probability,
+                })
+                .to_string();
+                index_builder(&table, "id".into(), options)
+                    .unwrap()
+                    .execute()
+                    .await
+                    .unwrap();
+                let reopened = conn.open_table(&name).execute().await.unwrap();
+                let dataset_ref = reopened.dataset().unwrap();
+                let dataset = dataset_ref.get().await.unwrap();
+                let stats: serde_json::Value =
+                    serde_json::from_str(&dataset.index_statistics("ids").await.unwrap()).unwrap();
+                let segment = &stats["indices"][0];
+                if let Some(count) = count {
+                    assert_eq!(segment["number_of_items"], count);
+                }
+                if let Some(probability) = probability {
+                    assert_eq!(segment["probability"], probability);
+                }
+            }
+        });
+    }
 }

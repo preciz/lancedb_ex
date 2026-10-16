@@ -54,6 +54,7 @@ Each index covers one column. Supported types:
 - `:fm`: case-sensitive substring filters with `contains`, including parts of words.
 - `:zonemap`: scalar filters using min/max summaries to skip ranges of rows.
 - `:ngram`: substring, `LIKE`, and supported regular-expression filters on text.
+- `:bloom_filter`: equality, `IN`, and null filters using summaries of groups of rows.
 - `:ivf_flat`: partitioned vector search without product quantization.
 - `:ivf_pq`: partitioned vector search with product quantization.
 - `:ivf_sq`: partitioned vector search with 8-bit scalar quantization.
@@ -63,7 +64,8 @@ Each index covers one column. Supported types:
 - `:hnsw_sq`: HNSW graphs within IVF partitions, with 8-bit scalar quantization.
 - `:fts`: tokenized full-text search on string columns.
 
-Choose `:label_list`, `:fm`, `:zonemap`, and `:ngram` explicitly. `:auto` does not select them.
+Choose `:label_list`, `:fm`, `:zonemap`, `:ngram`, and `:bloom_filter` explicitly.
+`:auto` does not select them.
 LabelList supports scalar list elements such as strings and integers. FM
 supports the package's string columns. It does not tokenize or normalize
 text. Both types support naming, replacement, statistics, prewarming,
@@ -99,6 +101,47 @@ binary, date, time, and timestamp columns, including `:large_string` and
 `:replace`, and `:train` controls apply, as do asynchronous creation,
 statistics, prewarming, optimization, and deletion. `Index.list/1` and
 `Index.stats/2` report the type as `"ZONEMAP"`.
+
+### Bloom filter indexes
+
+Use `:bloom_filter` to skip groups of rows that cannot match equality or `IN`
+filters. Bloom filters store compact summaries rather than a full mapping of
+values to rows. Candidate groups can contain false positives; the SDK checks
+the original filter against their rows, so query results remain exact.
+Null checks are also supported. Range filters use a scan.
+
+```elixir
+{:ok, :created} = LanceDB.Index.create(table, :id,
+  type: :bloom_filter,
+  number_of_items: 4096,
+  probability: 0.01
+)
+
+{:ok, rows} = LanceDB.Query.query(table, filter: "id = 42")
+{:ok, rows} = LanceDB.Query.query(table, filter: "id IN (42, 99)")
+```
+
+| Option | Meaning / SDK default |
+| --- | --- |
+| `:number_of_items` | Rows covered by each filter. Positive uint64 integer; normally 8192. This is a grouping size, not a table row limit. |
+| `:probability` | Target false-positive probability per filter. Finite number strictly between 0 and 1; normally 0.00057. Lower targets use more space. |
+
+Omitting either option retains the SDK's setting for that option. Lance can
+override the defaults with `LANCE_BLOOMFILTER_DEFAULT_NUMBER_OF_ITEMS` and
+`LANCE_BLOOMFILTER_DEFAULT_PROBABILITY`. These controls apply only to
+`:bloom_filter` creation. Smaller row groups allow finer pruning but create more
+filters; actual performance depends on the data and filter selectivity.
+
+Supported columns are signed and unsigned integers, `:float32`, `:float64`,
+strings and binary values (including `:large_string` and `:large_binary`),
+dates, times, and timestamps. The pinned SDK rejects boolean, `:float16`,
+fixed-size binary, decimal, and nested column types for this index.
+
+Names, replacement, reusable definitions, `train: false`, asynchronous creation,
+statistics, prewarming, optimization, and deletion use the existing index APIs.
+Queries include newly appended rows before those rows are indexed. Inspection
+reports the type as `"BLOOM_FILTER"`. Use `Query.explain/1` to check whether a
+particular filter uses it. Choose a B-tree when range-query acceleration is needed.
 
 ### Substring and pattern indexes
 
